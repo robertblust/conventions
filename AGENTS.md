@@ -31,4 +31,5 @@ to release.
 
 The tests are `sh test/run.sh`, which runs both scripts against temporary members with this
 checkout as the source, and `sh conventions/conventions-check` over this checkout itself, with
-`docs/superpowers/` excluded because a spec or plan quotes the very list it scans for. `.superpowers/` is excluded too, as tooling scratch that is not prose.
+`docs/superpowers/` excluded because a spec or plan quotes the very list it scans for.
+`.superpowers/` is excluded too, as tooling scratch that is not prose.
