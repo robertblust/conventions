@@ -99,6 +99,22 @@ if echo "$out" | grep -q 'vendored/v.md'; then ok "without exclude, every folder
 printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0", "exclude": ["vendored", "docs/superpowers"] }\n' > "$P/conventions.json"
 if pcheck > /dev/null; then ok "an excluded folder is not read"; else bad "an excluded folder was read: $(pcheck 2>&1)"; fi
 
+mkdir -p "$P/my folder" "$P/colour-folder"
+printf 'The colour in a folder with a space.\n' > "$P/my folder/v.md"
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0", "exclude": ["vendored", "docs/superpowers", "my folder"] }\n' > "$P/conventions.json"
+if pcheck > /dev/null; then ok "an exclude entry with a space in it is honored"; else bad "an exclude entry with a space was not honored: $(pcheck 2>&1)"; fi
+
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0", "exclude": ["vendored", "docs/superpowers", "my folder/"] }\n' > "$P/conventions.json"
+if pcheck > /dev/null; then ok "an exclude entry with a trailing slash is honored"; else bad "an exclude entry with a trailing slash was not honored: $(pcheck 2>&1)"; fi
+
+printf '```\nunclosed fence\nThe colour of it is grey.\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:3: unclosed code fence'; then ok "an unclosed fence is reported instead of silently dropped"; else bad "an unclosed fence was not reported: $out"; fi
+printf 'A spaced — dash.\n' > "$P/docs/kept/a.md"
+
+printf 'This is fine and correct.\n' > "$P/colour-folder/notes.md"
+if pcheck > /dev/null; then ok "a stem in the file's path is not mistaken for a stem in its prose"; else bad "a stem in the file's path was wrongly flagged: $(pcheck 2>&1)"; fi
+
 if [ -x "$HERE/conventions/conventions-check" ]; then ok "conventions-check is executable"; else bad "conventions-check is not executable"; fi
 if grep -q 'conventions-check' "$HERE/conventions/conventions-sync"; then ok "the sync script vendors conventions-check"; else bad "the sync script does not vendor conventions-check"; fi
 
