@@ -18,7 +18,7 @@ case $cmd in sync|check) ;; *) usage ;; esac
 
 PIN=conventions.json
 DIR=conventions
-FILES="WRITING.md WORKING.md REPOSITORIES.md AGENTS.md conventions-sync"
+FILES="WRITING.md WORKING.md REPOSITORIES.md AGENTS.md conventions-sync conventions-check"
 OPEN_RE='^<!-- conventions · v[^ ]* -->$'
 CLOSE='<!-- end conventions -->'
 
@@ -79,6 +79,7 @@ sync() {
     mv "$DIR/$f.new" "$DIR/$f"
   done
   chmod +x "$DIR/conventions-sync"
+  chmod +x "$DIR/conventions-check"
   write_block
   {
     printf '{\n  "repo": "%s",\n  "tag": "%s",\n  "files": {\n' "$REPO" "$TAG"

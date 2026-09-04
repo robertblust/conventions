@@ -70,4 +70,36 @@ if echo "$out" | grep -q 'no conventions.json'; then ok "a member without a pin 
 out=$(run frobnicate 2>&1 || true)
 if echo "$out" | grep -q '^usage:'; then ok "an unknown command prints usage"; else bad "no usage on an unknown command: $out"; fi
 
+# --- conventions-check: the prose tripwires, vendored ---------------------------------------
+P=$TMP/prose
+mkdir -p "$P/docs/kept" "$P/vendored"
+pcheck() { (cd "$P" && sh "$HERE/conventions/conventions-check"); }
+
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$P/conventions.json"
+printf '# clean\n\nThe color of the license — like this — is fine.\n' > "$P/README.md"
+if pcheck > /dev/null; then ok "conventions-check passes a clean tree"; else bad "conventions-check fails a clean tree: $(pcheck 2>&1)"; fi
+
+printf 'The colour of it.\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:1: colour'; then ok "a British word is named with its file and line"; else bad "a British word was not named: $out"; fi
+
+# shellcheck disable=SC2016 # literal markdown backticks, not command substitution
+printf '```\ncolour inside a fence\n```\n\nand `colour` inline.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "fenced and inline code are not prose"; else bad "code was scanned as prose: $(pcheck 2>&1)"; fi
+
+printf 'A closed—dash.\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:1: closed em-dash'; then ok "a closed em-dash is named"; else bad "a closed em-dash was missed: $out"; fi
+printf 'A spaced — dash.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "a spaced em-dash passes"; else bad "a spaced em-dash failed: $(pcheck 2>&1)"; fi
+
+printf 'The colour in a vendored file.\n' > "$P/vendored/v.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'vendored/v.md'; then ok "without exclude, every folder is scanned"; else bad "a folder was skipped with no exclude: $out"; fi
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0", "exclude": ["vendored", "docs/superpowers"] }\n' > "$P/conventions.json"
+if pcheck > /dev/null; then ok "an excluded folder is not read"; else bad "an excluded folder was read: $(pcheck 2>&1)"; fi
+
+if [ -x "$HERE/conventions/conventions-check" ]; then ok "conventions-check is executable"; else bad "conventions-check is not executable"; fi
+if grep -q 'conventions-check' "$HERE/conventions/conventions-sync"; then ok "the sync script vendors conventions-check"; else bad "the sync script does not vendor conventions-check"; fi
+
 if [ "$fails" -eq 0 ]; then echo "all pass"; else echo "$fails failing"; exit 1; fi
