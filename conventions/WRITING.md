@@ -22,8 +22,8 @@ not planned; adding one would mean writing this paragraph again with its own rea
 ## What every register shares
 
 Spelling is American English, in names and in prose: organization, modeling, license, color,
-behavior. Proper nouns, quoted matter and names fixed by something outside the family—a
-product, a standard, a file the ecosystem reads by name—stay as they are. A tripwire in this
+behavior. Proper nouns, quoted matter and names fixed by something outside the family — a
+product, a standard, a file the ecosystem reads by name — stay as they are. A tripwire in this
 repository holds the rule for what it ships, and every repository that vendors this file is
 expected to hold it the same way for its own text.
 
@@ -99,17 +99,20 @@ person who merges, never a verdict.
 
 ## English
 
-en-US, in the Chicago form, and the marks that go with it. A closed em-dash—like this—between
-clauses, never spaced. Curly
-quotes, “outside” and ‘inside’. No serial comma: vision, strategy and processes. Dates read
-May 4, 2012, and months abbreviate to three letters without a period, Oct 2012. A range takes
-a closed en-dash, May 2012–Oct 2016. Numbers group by comma, 16,000.
+en-US, and the marks that go with it. Spelling and marks follow the Chicago form, with one
+exception taken from AP style: the em-dash is spaced — like this — between clauses, the
+newspaper form, because that is the form the family's texts are read in. Chicago's closed form
+is not used. Curly quotes, “outside” and ‘inside’. No serial comma: vision, strategy and
+processes. Dates read May 4, 2012, and months abbreviate to three letters without a period,
+Oct 2012. A range takes a closed en-dash, May 2012–Oct 2016. Numbers group by comma, 16,000.
 
 ## German
 
 de-CH, as the section on languages says, and not the German of Germany. The reader is Sie,
 never du, except in a letter that matches its recipient. ss, never ß: Strasse, Massstab,
-grösser. Guillemets, «aussen» and ‹innen›. The Gedankenstrich is a spaced en-dash – like this – and never an em-dash. Dates read
+grösser. Guillemets, «aussen» and ‹innen›. The Gedankenstrich is a spaced en-dash – like this – and never an em-dash: German typography
+has no em-dash, its dash is the Halbgeviertstrich, so the two languages share the spacing and
+differ in the glyph, each following its own typography. Dates read
 4. Mai 2012; abbreviated months carry their period where German abbreviates them, Jan., Febr.,
 März, Apr., Mai, Juni, Juli, Aug., Sept., Okt., Nov., Dez. A range takes the spaced en-dash,
 Mai 2012 – Okt. 2016. Numbers group by the typographic apostrophe, 16’000, the character that
@@ -124,7 +127,7 @@ reached for a gerund.
 English, in the prose register:
 
 > The rule is one line long because the attributes were built to obey it: a page's own text
-> is English, and the translation is what an attribute carries—not the other way round.
+> is English, and the translation is what an attribute carries — not the other way round.
 > Anything that rewrites text in bulk masks those attributes first; otherwise correct German
 > becomes wrong German and nothing here notices, because every check reads the rendered page,
 > and the rendered page is only ever one language.

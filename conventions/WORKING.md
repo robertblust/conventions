@@ -55,7 +55,7 @@ consumer, what breaks, how to take it. There is no publish step anywhere in the 
 is the release.
 
 Everything one repository takes from another is pinned by a visible line in the taking
-repository, in whatever form its tooling gives it—a tag in a package file, a commit in a
+repository, in whatever form its tooling gives it — a tag in a package file, a commit in a
 source file, a release in a vendoring manifest. Pins are editorial. They move when the owner
 decides they move, in a commit that says why, and no bot proposes them; a pin that is behind is
 intent until the owner says it is drift.
@@ -86,6 +86,6 @@ comment, with a severity and the line it sits on. Silence is a valid answer to a
 
 ## What is never written
 
-Closed-source predecessor projects are not mentioned—in code, documentation, commits,
+Closed-source predecessor projects are not mentioned — in code, documentation, commits,
 pull requests, issues or release notes. Secrets are never printed, not to check them and not
 in a debug line; a value that reaches a transcript has to be rotated.
