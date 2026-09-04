@@ -71,6 +71,21 @@ write_block() {
 
 sync() {
   mkdir -p "$DIR"
+  # A member running an older conventions-sync has an older FILES list, missing whatever file
+  # a later release added; that stale list would fetch this script over itself and stop, never
+  # picking up the new file. So the current release of conventions-sync is fetched first; when
+  # it differs from what is on disk, it is moved into place and re-run once, guarded against a
+  # second re-exec, so the rest of the sync happens under the release's own FILES list.
+  if [ "${CONVENTIONS_REEXEC:-}" != "1" ]; then
+    fetch "$DIR/conventions-sync" "$DIR/conventions-sync.new"
+    if cmp -s "$DIR/conventions-sync.new" "$DIR/conventions-sync" 2> /dev/null; then
+      rm -f "$DIR/conventions-sync.new"
+    else
+      mv "$DIR/conventions-sync.new" "$DIR/conventions-sync"
+      chmod +x "$DIR/conventions-sync"
+      CONVENTIONS_REEXEC=1 exec sh "$DIR/conventions-sync" sync
+    fi
+  fi
   for f in $FILES; do
     case $f in
       AGENTS.md) fetch "AGENTS.md" "$DIR/$f.new" ;;

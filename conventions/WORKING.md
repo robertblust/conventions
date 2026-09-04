@@ -78,7 +78,7 @@ the job leaves the ruleset requiring a name that will never report again: the br
 protected and is not. Each repository names its required job id in its own agent file; rename
 one only together with its ruleset.
 
-Every repository's ruleset requires the `conventions` job beside the job that runs its own
+Every member's ruleset requires the `conventions` job beside the job that runs its own
 suite; a repository without a suite requires it alone. That job holds the vendored copy against
 its release and the repository's own Markdown against `WRITING.md`, and it is the same job
 everywhere because it is called from one place.

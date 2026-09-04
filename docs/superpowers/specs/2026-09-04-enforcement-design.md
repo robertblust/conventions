@@ -82,8 +82,9 @@ ubuntu-latest`, id and name `conventions`, `timeout-minutes: 5`. Steps: checkout
 that reads the tag from `github.job_workflow_ref` — the part after `@refs/tags/` — and from
 `conventions.json`, and exits 1 naming both when they differ; `sh conventions/conventions-sync
 check`; `sh conventions/conventions-check`. Nothing is installed. The repository's own CI keeps
-its `test` job for the script tests and shellcheck and gains a call to this workflow, so the
-job that members require is also run here.
+its `test` job for the script tests, shellcheck and the prose check; it does not call this
+workflow, because the source has no pin to check against and cannot call itself at a tag from
+a branch.
 
 **The block.** The sentence naming `check` and `sync` becomes: `sh conventions/conventions-sync
 check` says whether the copy matches the release, `sync` brings it to the release the pin

@@ -10,6 +10,8 @@ jobs:
     name: conventions
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
       - name: the workflow's tag is the member's pin
@@ -20,6 +22,7 @@ jobs:
             *@refs/tags/*) tag=${REF##*@refs/tags/} ;;
             *) echo "✗ conventions: called at $REF, not at a tag — pin a release" >&2; exit 1 ;;
           esac
+          [ -f conventions.json ] || { echo "✗ conventions: no conventions.json here — a member names the release it follows" >&2; exit 1; }
           pin=$(sed -n 's/.*"tag" *: *"\([^"]*\)".*/\1/p' conventions.json | head -1)
           if [ "$tag" != "$pin" ]; then
             echo "✗ conventions: the workflow is called at $tag, conventions.json names $pin — move one to the other" >&2

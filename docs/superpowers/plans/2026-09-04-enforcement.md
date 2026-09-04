@@ -465,7 +465,7 @@ git checkout main && git pull && git branch -d enforcement
 gh release create v1.3.0 --target main --title "v1.3.0" --notes "$(cat <<'EOF'
 Enforcement reaches the members. `conventions/conventions-check` is vendored beside the sync script and holds a repository's own Markdown to `WRITING.md`: American English and the spaced em-dash, with fenced and inline code left alone and any folder under `exclude` in `conventions.json` unread. `.github/workflows/check.yml` is a reusable workflow: one job named `conventions` that runs the sync check and the prose check, and refuses to run when the tag it is called at differs from the tag the repository pins.
 
-The block in `AGENTS.md` names the new script, so every copy is stale; re-sync in the order `REPOSITORIES.md` gives. Two rules join `WORKING.md`: a branch is deleted once its pull request is merged, and every ruleset requires the `conventions` job.
+The block in `AGENTS.md` names the new script, so every copy is stale; re-sync in the order `REPOSITORIES.md` gives. A member still on v1.2.0 runs `sync` twice the first time, because that script does not know about the file this release adds; from v1.3.0 on, one `sync` is enough. Two rules join `WORKING.md`: a branch is deleted once its pull request is merged, and every ruleset requires the `conventions` job.
 
 To take it, from a repository's root, then add the workflow the README shows and require `conventions` in the ruleset:
 
@@ -493,10 +493,13 @@ EOF
 cd ~/git/robertblust/mental-model && git checkout main && git pull && git checkout -b conventions-1-3-0
 printf '{ "repo": "robertblust/conventions", "tag": "v1.3.0", "exclude": ["meta"] }\n' > conventions.json
 sh conventions/conventions-sync sync
+sh conventions/conventions-sync sync  # twice: the v1.2.0 script does not know about conventions-check
 sh conventions/conventions-sync check; echo "check exit $?"
 head -1 AGENTS.md
 ```
-Expected: `✓ … match robertblust/conventions@v1.3.0`, exit 0, marker `v1.3.0`.
+Expected: the first `sync` uses the v1.2.0 script and misses `conventions-check`; the second
+uses the v1.3.0 script it just fetched and vendors it. `check` then reads `✓ … match
+robertblust/conventions@v1.3.0`, exit 0, marker `v1.3.0`.
 
 - [ ] **Step 2: Run the prose check and fix what is this repository's**
 
@@ -564,6 +567,9 @@ Expected: a check named `conventions` passes. If it fails on the tag step, the p
 
 - [ ] **Step 6: The ruleset**
 
+GitHub names a check from a reusable workflow after the caller and the called job, so read the
+exact name from `gh pr checks` on the pull request first and use it verbatim below.
+
 ```bash
 gh api -X POST repos/robertblust/mental-model/rulesets --input - <<'EOF'
 {
@@ -584,7 +590,7 @@ gh api -X POST repos/robertblust/mental-model/rulesets --input - <<'EOF'
     { "type": "required_status_checks", "parameters": {
         "strict_required_status_checks_policy": true,
         "do_not_enforce_on_create": false,
-        "required_status_checks": [ { "context": "conventions" } ] } }
+        "required_status_checks": [ { "context": "conventions / conventions" } ] } }
   ],
   "bypass_actors": [ { "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" } ]
 }

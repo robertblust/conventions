@@ -18,9 +18,10 @@ printf '# member — working conventions\n\nIts own text.\n' > "$MEMBER/AGENTS.m
 
 # sync vendors the files and writes the block
 run sync > /dev/null
-for f in WRITING.md WORKING.md REPOSITORIES.md AGENTS.md conventions-sync manifest.json; do
+for f in WRITING.md WORKING.md REPOSITORIES.md AGENTS.md conventions-sync conventions-check manifest.json; do
   [ -f "$MEMBER/conventions/$f" ] || bad "sync did not write conventions/$f"
 done
+if [ -x "$MEMBER/conventions/conventions-check" ]; then ok "conventions-check is vendored executable"; else bad "conventions-check is not vendored executable"; fi
 if grep -q '^<!-- conventions · v1.0.0 -->$' "$MEMBER/AGENTS.md" && grep -q '^<!-- end conventions -->$' "$MEMBER/AGENTS.md"
 then ok "sync writes the block with the pinned tag"; else bad "block missing or unversioned"; fi
 if head -1 "$MEMBER/AGENTS.md" | grep -q '^<!-- conventions'; then ok "the block is the first line"; else bad "the block is not first"; fi
@@ -70,6 +71,28 @@ if echo "$out" | grep -q 'no conventions.json'; then ok "a member without a pin 
 out=$(run frobnicate 2>&1 || true)
 if echo "$out" | grep -q '^usage:'; then ok "an unknown command prints usage"; else bad "no usage on an unknown command: $out"; fi
 
+# --- conventions-sync: a script that knows to re-exec fetches itself first ------------------
+# This proves the mechanism for a script that already carries it: its own FILES is trimmed by
+# hand to look like an older release's, but the re-exec code stays, which is the case every
+# real upgrade from v1.3.0 onward is in. It does not prove anything about the real v1.2.0
+# binary, which lacks the mechanism entirely and still needs sync run twice — see README.md.
+SELFUPDATING=$TMP/selfupdating-conventions-sync
+cp "$HERE/conventions/conventions-sync" "$SELFUPDATING"
+sed -i.bak 's/^FILES="\(.*\) conventions-check"$/FILES="\1"/' "$SELFUPDATING" && rm -f "$SELFUPDATING.bak"
+if grep '^FILES=' "$SELFUPDATING" | grep -q conventions-check; then bad "the trimmed FILES still names conventions-check"; fi
+UPGRADE=$TMP/upgrade
+mkdir -p "$UPGRADE"
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$UPGRADE/conventions.json"
+(cd "$UPGRADE" && CONVENTIONS_SOURCE="$HERE" sh "$SELFUPDATING" sync) > /dev/null
+if [ -f "$UPGRADE/conventions/conventions-check" ]
+then ok "a script that knows to re-exec vendors a file its own FILES lacks in one sync"
+else bad "conventions-check is still missing after one sync from a script that knows to re-exec"
+fi
+if (cd "$UPGRADE" && CONVENTIONS_SOURCE="$HERE" sh conventions/conventions-sync check) > /dev/null
+then ok "check passes after that one sync"
+else bad "check failed after that one sync"
+fi
+
 # --- conventions-check: the prose tripwires, vendored ---------------------------------------
 P=$TMP/prose
 mkdir -p "$P/docs/kept" "$P/vendored"
@@ -114,6 +137,39 @@ printf 'A spaced — dash.\n' > "$P/docs/kept/a.md"
 
 printf 'This is fine and correct.\n' > "$P/colour-folder/notes.md"
 if pcheck > /dev/null; then ok "a stem in the file's path is not mistaken for a stem in its prose"; else bad "a stem in the file's path was wrongly flagged: $(pcheck 2>&1)"; fi
+
+# a stem anchored on an American word does not fire, and the British forms still do
+printf 'An organism is an optimist about initialisms.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "American words that contain a stem are not hits"; else bad "an American word was wrongly flagged: $(pcheck 2>&1)"; fi
+printf 'The organisation meets today.\nThe result is optimised.\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q ':1: organisa$' && echo "$out" | grep -q ':2: optimise$'
+then ok "the British forms of those stems are still caught"
+else bad "a British form was missed: $out"
+fi
+
+# the reported word drops a trailing non-letter
+printf 'It is grey today.\nMind the kerb.\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q ':1: grey$' && echo "$out" | grep -q ':2: kerb$'
+then ok "a trailing non-letter is stripped from the reported word"
+else bad "the reported word kept its trailing punctuation: $out"
+fi
+
+# a CRLF line ending is not mistaken for a non-space neighbor of a spaced em-dash
+printf 'A trailing dash —\r\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null
+then ok "a spaced em-dash before a CRLF line ending passes"
+else bad "a CRLF line ending after a spaced em-dash was wrongly flagged: $(pcheck 2>&1)"
+fi
+printf 'A spaced — dash.\n' > "$P/docs/kept/a.md"
+
+# an empty scan is an error, not a silent green
+out=$(CONVENTIONS_ROOT="$TMP/nowhere" sh "$HERE/conventions/conventions-check" 2>&1 || true)
+if echo "$out" | grep -q 'no Markdown file was scanned under'
+then ok "an empty scan is not silently green"
+else bad "an empty scan was not caught: $out"
+fi
 
 if [ -x "$HERE/conventions/conventions-check" ]; then ok "conventions-check is executable"; else bad "conventions-check is not executable"; fi
 if grep -q 'conventions-check' "$HERE/conventions/conventions-sync"; then ok "the sync script vendors conventions-check"; else bad "the sync script does not vendor conventions-check"; fi

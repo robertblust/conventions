@@ -44,11 +44,17 @@ jobs:
 ```
 
 The tag in `uses:` and the tag in `conventions.json` must agree; the job fails when they do
-not. Require `conventions` in the branch ruleset beside the job that runs the repository's own
-suite. To take a new release, move both tags, run `sync`, and commit what changed.
+not. GitHub names a check from a reusable workflow after the caller and the called job, so the
+context to require in the branch ruleset is `conventions / conventions`, beside the job that
+runs the repository's own suite. To take a new release, move both tags, run `sync` and commit
+what changed. A member still on v1.2.0 runs `sync` twice the first time, because the v1.2.0
+script does not know about the file this release adds; from v1.3.0 on, the script fetches its
+own new version first and one `sync` is enough.
 
 A folder that is someone else's prose — a vendored core, a copied specification — is listed
-under `exclude` in `conventions.json` and is not scanned:
+under `exclude` in `conventions.json` and is not scanned. A folder of German prose is listed
+there too, because the scan reads no language and a German word such as `Organisation` would
+be a hit:
 
 ```json
 { "repo": "robertblust/conventions", "tag": "v1.3.0", "exclude": ["meta"] }
@@ -72,7 +78,7 @@ members in the order to re-sync them.
 
 `sh test/run.sh` runs both scripts against temporary members with this checkout as the source.
 `sh conventions/conventions-check` runs over this checkout itself, `docs/superpowers/` excluded
-because a spec or plan quotes the list it scans for. CI runs both, and `shellcheck` over the
-shell.
+because a spec or plan quotes the list it scans for, and `.superpowers/` excluded beside it as
+tooling scratch, not prose. CI runs both, and `shellcheck` over the shell.
 
 Apache 2.0.
