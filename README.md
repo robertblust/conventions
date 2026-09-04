@@ -18,8 +18,8 @@ so a copy that drifts from its release turns a build red rather than quietly div
 Once, from the repository's root, naming the release to follow:
 
 ```sh
-printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > conventions.json
-curl -fsSL https://raw.githubusercontent.com/robertblust/conventions/v1.0.0/conventions/conventions-sync -o /tmp/conventions-sync
+printf '{ "repo": "robertblust/conventions", "tag": "v1.1.0" }\n' > conventions.json
+curl -fsSL https://raw.githubusercontent.com/robertblust/conventions/v1.1.0/conventions/conventions-sync -o /tmp/conventions-sync
 sh /tmp/conventions-sync sync
 ```
 
