@@ -10,6 +10,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
-      - run: shellcheck conventions/conventions-sync test/run.sh test/spelling.sh
+      - run: shellcheck conventions/conventions-sync test/run.sh test/spelling.sh test/dashes.sh
       - run: sh test/run.sh
       - run: sh test/spelling.sh
+      - run: sh test/dashes.sh

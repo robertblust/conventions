@@ -24,7 +24,7 @@ everywhere.
 
 What is listed here is the family; what is not listed is outside it. An agent working in a
 member reads, links and reasons within this list, and does not reach for a repository, a
-directory or a file outside it on its own—not for context, not for an example, not because
+directory or a file outside it on its own — not for context, not for an example, not because
 it sits beside a member on the same disk. When a task needs something outside the list, the
 task says so, names it, and names the one purpose it serves; that reference belongs to that
 task and does not bring the thing into the family.
