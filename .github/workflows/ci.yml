@@ -1,0 +1,15 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  # The job id is what a branch ruleset requires. Rename it only together with the ruleset.
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck conventions/conventions-sync test/run.sh test/spelling.sh
+      - run: sh test/run.sh
+      - run: sh test/spelling.sh
