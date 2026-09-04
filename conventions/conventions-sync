@@ -26,7 +26,7 @@ CLOSE='<!-- end conventions -->'
 pin() { sed -n "s/.*\"$1\" *: *\"\([^\"]*\)\".*/\1/p" "$PIN" | head -1; }
 REPO=$(pin repo)
 TAG=$(pin tag)
-[ -n "$REPO" ] && [ -n "$TAG" ] || { echo "✗ conventions: $PIN needs \"repo\" and \"tag\"" >&2; exit 1; }
+if [ -z "$REPO" ] || [ -z "$TAG" ]; then echo "✗ conventions: $PIN needs \"repo\" and \"tag\"" >&2; exit 1; fi
 SOURCE=${CONVENTIONS_SOURCE:-https://raw.githubusercontent.com/$REPO/$TAG}
 
 sha() {
