@@ -18,8 +18,8 @@ so a copy that drifts from its release turns a build red rather than quietly div
 Once, from the repository's root, naming the release to follow:
 
 ```sh
-printf '{ "repo": "robertblust/conventions", "tag": "v1.2.0" }\n' > conventions.json
-curl -fsSL https://raw.githubusercontent.com/robertblust/conventions/v1.2.0/conventions/conventions-sync -o /tmp/conventions-sync
+printf '{ "repo": "robertblust/conventions", "tag": "v1.3.0" }\n' > conventions.json
+curl -fsSL https://raw.githubusercontent.com/robertblust/conventions/v1.3.0/conventions/conventions-sync -o /tmp/conventions-sync
 sh /tmp/conventions-sync sync
 ```
 
@@ -30,8 +30,29 @@ sh conventions/conventions-sync check   # exit 1 with one ✗ line per thing tha
 sh conventions/conventions-sync sync    # bring the copy to the release conventions.json names
 ```
 
-Put `check` in CI before anything installs. Move the tag in `conventions.json` to take a new
-release, run `sync`, and commit what changed.
+Then add `.github/workflows/conventions.yml`, which calls the job every member runs:
+
+```yaml
+name: conventions
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  conventions:
+    uses: robertblust/conventions/.github/workflows/check.yml@v1.3.0
+```
+
+The tag in `uses:` and the tag in `conventions.json` must agree; the job fails when they do
+not. Require `conventions` in the branch ruleset beside the job that runs the repository's own
+suite. To take a new release, move both tags, run `sync`, and commit what changed.
+
+A folder that is someone else's prose — a vendored core, a copied specification — is listed
+under `exclude` in `conventions.json` and is not scanned:
+
+```json
+{ "repo": "robertblust/conventions", "tag": "v1.3.0", "exclude": ["meta"] }
+```
 
 ## Layout
 
@@ -49,10 +70,9 @@ members in the order to re-sync them.
 
 ## Tests
 
-`sh test/run.sh` runs the script against a temporary member with this checkout as the source.
-`sh test/spelling.sh` fails on any British spelling in a Markdown file outside
-`docs/superpowers/`, where a spec or plan may have to quote the list. `sh test/dashes.sh` fails
-on any closed em-dash outside a code fence, for the same files. CI runs all three, and
-`shellcheck` over the shell.
+`sh test/run.sh` runs both scripts against temporary members with this checkout as the source.
+`sh conventions/conventions-check` runs over this checkout itself, `docs/superpowers/` excluded
+because a spec or plan quotes the list it scans for. CI runs both, and `shellcheck` over the
+shell.
 
 Apache 2.0.

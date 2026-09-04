@@ -1,1 +1,1 @@
-{ "exclude": ["docs/superpowers"] }
+{ "exclude": ["docs/superpowers", ".superpowers"] }
