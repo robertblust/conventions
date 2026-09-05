@@ -18,8 +18,8 @@ so a copy that drifts from its release turns a build red rather than quietly div
 Once, from the repository's root, naming the release to follow:
 
 ```sh
-printf '{ "repo": "robertblust/conventions", "tag": "v1.3.1" }\n' > conventions.json
-curl -fsSL https://raw.githubusercontent.com/robertblust/conventions/v1.3.1/conventions/conventions-sync -o /tmp/conventions-sync
+printf '{ "repo": "robertblust/conventions", "tag": "v1.3.2" }\n' > conventions.json
+curl -fsSL https://raw.githubusercontent.com/robertblust/conventions/v1.3.2/conventions/conventions-sync -o /tmp/conventions-sync
 sh /tmp/conventions-sync sync
 ```
 
@@ -40,7 +40,7 @@ on:
   pull_request:
 jobs:
   conventions:
-    uses: robertblust/conventions/.github/workflows/check.yml@v1.3.1
+    uses: robertblust/conventions/.github/workflows/check.yml@v1.3.2
 ```
 
 The tag in `uses:` and the tag in `conventions.json` must agree; the job fails when they do
@@ -57,7 +57,7 @@ there too, because the scan reads no language and a German word such as `Organis
 be a hit:
 
 ```json
-{ "repo": "robertblust/conventions", "tag": "v1.3.1", "exclude": ["meta"] }
+{ "repo": "robertblust/conventions", "tag": "v1.3.2", "exclude": ["meta"] }
 ```
 
 ## Layout
@@ -71,8 +71,9 @@ exactly as they will in a member, and the root `AGENTS.md` carries the block a m
 A tag and a GitHub Release with notes in the prose register: what changed, what breaks, how to
 take it. Any change to a vendored file is at least a minor release, because it makes every copy
 stale. A change to the block's shape or the script's commands is a major. Before tagging, set
-the version in the first line of `AGENTS.md` to the new tag. `REPOSITORIES.md` lists the
-members in the order to re-sync them.
+the version in the first line of `AGENTS.md` to the new tag, and set `CONVENTIONS_RELEASE` in
+`.github/workflows/check.yml` to the same tag; a test fails when the two disagree.
+`REPOSITORIES.md` lists the members in the order to re-sync them.
 
 ## Tests
 
