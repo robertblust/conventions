@@ -2,7 +2,8 @@
 # One job, named conventions, which is the id a member's ruleset requires. It holds the vendored
 # copy against the release and the member's own Markdown against WRITING.md, and it refuses to
 # run when the commit it executes at is not the commit the member's pinned tag resolves to, so
-# the two cannot drift.
+# the two cannot drift. The guard proves the workflow's commit is the pinned release's commit;
+# it cannot see how the caller spelled the ref.
 name: conventions
 on:
   workflow_call:
@@ -27,7 +28,7 @@ jobs:
             exit 1
           fi
           refs=$(git ls-remote --tags "https://github.com/$repo.git" "refs/tags/$tag" "refs/tags/$tag^{}")
-          resolved=$(printf '%s\n' "$refs" | awk '/\^\{\}$/ { print $1; found=1 } END { if (!found) exit 1 }')
+          resolved=$(printf '%s\n' "$refs" | awk '/\^\{\}$/ { print $1; exit }')
           if [ -z "$resolved" ]; then
             resolved=$(printf '%s\n' "$refs" | awk '{ print $1 }' | head -1)
           fi
@@ -38,7 +39,7 @@ jobs:
           if [ "$resolved" != "$JOB_SHA" ]; then
             job_short=$(printf '%s' "$JOB_SHA" | cut -c1-7)
             resolved_short=$(printf '%s' "$resolved" | cut -c1-7)
-            echo "✗ conventions: the workflow runs at $job_short, conventions.json names $tag at $resolved_short — move the uses: tag and the pin to the same release" >&2
+            echo "✗ conventions: the workflow runs at $job_short, conventions.json names $tag at $resolved_short — call this workflow at the tag conventions.json names" >&2
             exit 1
           fi
           echo "✓ conventions: workflow and pin agree on $tag"
