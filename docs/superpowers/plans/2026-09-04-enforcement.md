@@ -491,7 +491,7 @@ EOF
 
 ```bash
 cd ~/git/robertblust/mental-model && git checkout main && git pull && git checkout -b conventions-1-3-0
-printf '{ "repo": "robertblust/conventions", "tag": "v1.3.0", "exclude": ["meta"] }\n' > conventions.json
+printf '{ "repo": "robertblust/conventions", "tag": "v1.3.1", "exclude": ["meta"] }\n' > conventions.json
 sh conventions/conventions-sync sync
 sh conventions/conventions-sync sync  # twice: the v1.2.0 script does not know about conventions-check
 sh conventions/conventions-sync check; echo "check exit $?"
@@ -520,7 +520,7 @@ on:
   pull_request:
 jobs:
   conventions:
-    uses: robertblust/conventions/.github/workflows/check.yml@v1.3.0
+    uses: robertblust/conventions/.github/workflows/check.yml@v1.3.1
 ```
 
 - [ ] **Step 4: The agent file's own paragraph**
@@ -540,9 +540,9 @@ vendored and never edited here; its words are core's to hold.
 ```bash
 git add conventions.json conventions AGENTS.md README.md docs/specs/2026-09-02-experience-kind.md .github/workflows/conventions.yml
 git commit -F - <<'EOF'
-Conventions v1.3.0, a conventions job, and three spellings
+Conventions v1.3.1, a conventions job, and three spellings
 
-The pin moves to v1.3.0, which brings conventions-check beside the sync script; meta/ is
+The pin moves to v1.3.1, which brings conventions-check beside the sync script; meta/ is
 excluded from it because the vendored core's words are core's to hold. A five-line workflow
 calls the shared job at the pinned tag, the first CI this repository has. The prose check
 named artefact in the README and modelling twice in a spec; all three are American now.
@@ -553,8 +553,8 @@ by exit code; the conventions job on the pull request is the reusable workflow's
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 EOF
 git push -u origin conventions-1-3-0
-gh pr create --title "Conventions v1.3.0, a conventions job, and three spellings" --body "$(cat <<'EOF'
-The pin moves to v1.3.0, which brings `conventions-check` beside the sync script; `meta/` is excluded because the vendored core's words are core's to hold. A five-line workflow calls the shared job at the pinned tag, the first CI this repository has. The prose check named `artefact` in the README and `modelling` twice in a spec; all three are American now.
+gh pr create --title "Conventions v1.3.1, a conventions job, and three spellings" --body "$(cat <<'EOF'
+The pin moves to v1.3.1, which brings `conventions-check` beside the sync script; `meta/` is excluded because the vendored core's words are core's to hold. A five-line workflow calls the shared job at the pinned tag, the first CI this repository has. The prose check named `artefact` in the README and `modelling` twice in a spec; all three are American now.
 
 This is the reusable workflow's first run anywhere. A ruleset requiring `conventions` follows once it is green.
 
