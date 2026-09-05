@@ -18,8 +18,8 @@ so a copy that drifts from its release turns a build red rather than quietly div
 Once, from the repository's root, naming the release to follow:
 
 ```sh
-printf '{ "repo": "robertblust/conventions", "tag": "v1.3.0" }\n' > conventions.json
-curl -fsSL https://raw.githubusercontent.com/robertblust/conventions/v1.3.0/conventions/conventions-sync -o /tmp/conventions-sync
+printf '{ "repo": "robertblust/conventions", "tag": "v1.3.1" }\n' > conventions.json
+curl -fsSL https://raw.githubusercontent.com/robertblust/conventions/v1.3.1/conventions/conventions-sync -o /tmp/conventions-sync
 sh /tmp/conventions-sync sync
 ```
 
@@ -40,7 +40,7 @@ on:
   pull_request:
 jobs:
   conventions:
-    uses: robertblust/conventions/.github/workflows/check.yml@v1.3.0
+    uses: robertblust/conventions/.github/workflows/check.yml@v1.3.1
 ```
 
 The tag in `uses:` and the tag in `conventions.json` must agree; the job fails when they do
@@ -57,7 +57,7 @@ there too, because the scan reads no language and a German word such as `Organis
 be a hit:
 
 ```json
-{ "repo": "robertblust/conventions", "tag": "v1.3.0", "exclude": ["meta"] }
+{ "repo": "robertblust/conventions", "tag": "v1.3.1", "exclude": ["meta"] }
 ```
 
 ## Layout
