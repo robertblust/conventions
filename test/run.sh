@@ -171,6 +171,15 @@ then ok "an empty scan is not silently green"
 else bad "an empty scan was not caught: $out"
 fi
 
+printf 'A generalist with realism, emphasis, criticism, synthesis and a paralysis; the meter and the specialist.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "American words that begin like an -ise stem are not hits"; else bad "an American word tripped an -ise stem: $(pcheck 2>&1)"; fi
+printf 'They generalise.\nIt authorised.\nIt materialised.\nIt synthesised.\nIt modelled.\nThe harbour.\nIn metres.\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+for w in generalise authorised materialised synthesised modelled harbour metres; do
+  if echo "$out" | grep -q ": $w"; then ok "$w is a hit"; else bad "$w was not a hit: $out"; fi
+done
+printf '# clean\n' > "$P/docs/kept/a.md"
+
 if [ -x "$HERE/conventions/conventions-check" ]; then ok "conventions-check is executable"; else bad "conventions-check is not executable"; fi
 if grep -q 'conventions-check' "$HERE/conventions/conventions-sync"; then ok "the sync script vendors conventions-check"; else bad "the sync script does not vendor conventions-check"; fi
 
