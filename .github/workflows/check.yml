@@ -1,12 +1,11 @@
-# Called by every member at a tag: uses: robertblust/conventions/.github/workflows/check.yml@vX.Y.Z
-# One job, named conventions, which is the id a member's ruleset requires. It holds the vendored
-# copy against the release and the member's own Markdown against WRITING.md, and it refuses to
-# run when the commit it executes at is not the commit the member's pinned tag resolves to, so
-# the two cannot drift. The guard proves the workflow's commit is the pinned release's commit;
-# it cannot see how the caller spelled the ref.
+# The guard compares the release this file declares with the pin, because the runner exposes nothing about
+# the called workflow to its steps; it cannot see how the caller spelled the ref, so a member calls it at
+# the tag conventions.json names, and a call at a branch gets whatever that branch declares.
 name: conventions
 on:
   workflow_call:
+env:
+  CONVENTIONS_RELEASE: v1.3.2
 jobs:
   conventions:
     name: conventions
@@ -16,32 +15,14 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v5
-      - name: the workflow's commit is the member's pinned release
-        env:
-          JOB_SHA: ${{ github.job_workflow_sha }}
+      - name: the workflow's release is the member's pin
         run: |
           [ -f conventions.json ] || { echo "✗ conventions: no conventions.json here — a member names the release it follows" >&2; exit 1; }
-          repo=$(sed -n 's/.*"repo" *: *"\([^"]*\)".*/\1/p' conventions.json | head -1)
-          tag=$(sed -n 's/.*"tag" *: *"\([^"]*\)".*/\1/p' conventions.json | head -1)
-          if [ -z "$JOB_SHA" ]; then
-            echo "✗ conventions: the runner exposed no job_workflow_sha — call this workflow with uses: at a tag" >&2
+          pin=$(sed -n 's/.*"tag" *: *"\([^"]*\)".*/\1/p' conventions.json | head -1)
+          if [ "$CONVENTIONS_RELEASE" != "$pin" ]; then
+            echo "✗ conventions: this workflow is release $CONVENTIONS_RELEASE, conventions.json names $pin — call it at the tag conventions.json names" >&2
             exit 1
           fi
-          refs=$(git ls-remote --tags "https://github.com/$repo.git" "refs/tags/$tag" "refs/tags/$tag^{}")
-          resolved=$(printf '%s\n' "$refs" | awk '/\^\{\}$/ { print $1; exit }')
-          if [ -z "$resolved" ]; then
-            resolved=$(printf '%s\n' "$refs" | awk '{ print $1 }' | head -1)
-          fi
-          if [ -z "$resolved" ]; then
-            echo "✗ conventions: $repo has no tag $tag — conventions.json names a release that does not exist" >&2
-            exit 1
-          fi
-          if [ "$resolved" != "$JOB_SHA" ]; then
-            job_short=$(printf '%s' "$JOB_SHA" | cut -c1-7)
-            resolved_short=$(printf '%s' "$resolved" | cut -c1-7)
-            echo "✗ conventions: the workflow runs at $job_short, conventions.json names $tag at $resolved_short — call this workflow at the tag conventions.json names" >&2
-            exit 1
-          fi
-          echo "✓ conventions: workflow and pin agree on $tag"
+          echo "✓ conventions: workflow and pin agree on $pin"
       - run: sh conventions/conventions-sync check
       - run: sh conventions/conventions-check

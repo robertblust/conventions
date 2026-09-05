@@ -174,4 +174,12 @@ fi
 if [ -x "$HERE/conventions/conventions-check" ]; then ok "conventions-check is executable"; else bad "conventions-check is not executable"; fi
 if grep -q 'conventions-check' "$HERE/conventions/conventions-sync"; then ok "the sync script vendors conventions-check"; else bad "the sync script does not vendor conventions-check"; fi
 
+# the workflow's declared release and the marker version cannot drift apart
+workflow_release=$(sed -n 's/^ *CONVENTIONS_RELEASE: *//p' "$HERE/.github/workflows/check.yml")
+marker_version=$(sed -n '1s/.*· \(v[^ ]*\) -->.*/\1/p' "$HERE/AGENTS.md")
+if [ "$workflow_release" = "$marker_version" ]
+then ok "check.yml's release and AGENTS.md's marker agree on $marker_version"
+else bad "check.yml declares $workflow_release, AGENTS.md's marker names $marker_version"
+fi
+
 if [ "$fails" -eq 0 ]; then echo "all pass"; else echo "$fails failing"; exit 1; fi
