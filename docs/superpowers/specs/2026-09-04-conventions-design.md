@@ -9,7 +9,7 @@
 Status: proposed. Creates `robertblust/conventions`. Changes the agent entry file of every
 member repository, removes the sections they copy from one another, and adds one pinned line,
 one vendored folder and one CI step to each. Companion: `robertblust/design`'s
-`2026-09-03-writing-design.md`, which keeps the typography check and the page sweeps.
+`2026-09-05-page-typography-design.md`, which keeps the typography check and the page sweeps.
 
 ---
 
