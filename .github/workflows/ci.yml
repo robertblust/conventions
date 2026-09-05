@@ -4,13 +4,13 @@ on:
     branches: [main]
   pull_request:
 jobs:
-  # The job id is what a branch ruleset requires. Rename it only together with the ruleset.
+  # The job id is what the branch ruleset requires. Rename it only together with the ruleset.
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
-      - run: shellcheck conventions/conventions-sync test/run.sh test/spelling.sh test/dashes.sh
+      - run: shellcheck conventions/conventions-sync conventions/conventions-check test/run.sh
+      - run: python3 -c "import yaml; [yaml.safe_load(open(f)) for f in ('.github/workflows/check.yml', '.github/workflows/ci.yml')]"
       - run: sh test/run.sh
-      - run: sh test/spelling.sh
-      - run: sh test/dashes.sh
+      - run: sh conventions/conventions-check

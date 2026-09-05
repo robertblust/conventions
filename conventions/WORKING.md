@@ -9,6 +9,9 @@ One branch per change, named for what it does, branched from the default branch.
 committed on the default branch directly; it is protected in every repository that has a
 suite, and a ruleset that forbids a push is the only kind that survives a hurried afternoon.
 
+A branch is deleted once its pull request is merged. The merge commit is its record; a branch
+left standing is a question every reader of the branch list has to answer again.
+
 An agent commits when the owner asks, and not on its own initiative. It proposes the message
 in the git register of `WRITING.md`. The author of the commit is the person. A tool that
 co-authored the change is named in a `Co-Authored-By` trailer, whichever tool it was, so the
@@ -74,6 +77,11 @@ A branch ruleset requires a status check by its job id, not by the workflow's na
 the job leaves the ruleset requiring a name that will never report again: the branch looks
 protected and is not. Each repository names its required job id in its own agent file; rename
 one only together with its ruleset.
+
+Every member's ruleset requires the `conventions` job beside the job that runs its own
+suite; a repository without a suite requires it alone. That job holds the vendored copy against
+its release and the repository's own Markdown against `WRITING.md`, and it is the same job
+everywhere because it is called from one place.
 
 CI never writes what the repository commits. Rendered cards, exported PDFs and generated
 pages are built locally and committed; CI checks that the committed copy matches what would
