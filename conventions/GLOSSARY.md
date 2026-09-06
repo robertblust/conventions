@@ -19,9 +19,13 @@ marks `TRANSLATOR.md` repeats are the only places the shared files carry German 
 | identity resolution | identity resolution | `Identitätsauflösung` | guestgraph.io, the billing page and the intro talk. |
 | Mental Model | Mental Model | `Mental Model` | A coined name for the owner's knowledge base, kept in English in both languages like CompanyGraph; `mentales Modell` is the psychology term and is not meant. The page `/model/` is `Modell`, the generic noun. |
 | open core | open core | `Open Core` | Kept in English on blust.ch; a term of the trade. |
-| open source | open source | `quelloffen` | The adjective; in a compound, `Open-Source-`, as guestgraph.io writes it. |
+| open source | open source | `quelloffen` | The adjective; capitalized `Quelloffen` where it stands alone as a tag; in a compound, `Open-Source-`, as guestgraph.io writes it. Never the bare English `Open Source` in German. |
 | talk | talk | `Vortrag` | A talk on a site; the deck is the file that carries it. |
+| reference instance | reference instance | `Referenz-Instanz` | mental-model's role in the family; the form blust.ch's ideas page chose. |
+| guest graph | guest graph | `Gast-Graph` | The short form, distinct from guest identity graph; blust.ch's ideas page. |
+| core | core | `core` | The directory in companygraph/meta-model and the release its version names; a name the ecosystem reads, so not `Kern`. |
+| considered, not accepted | considered, not accepted | `Erwogen, nicht angenommen` | The design system's phrase for a candidate weighed and set aside; one form on every billing page. |
 | figure | figure | `Diagramm` | The drawn graph on a model page. The owner's choice over `Zeichnung`, which reads as a drawing by hand. |
 
 English forms fixed here whose German no page carries yet, to be chosen the first time a text
-needs them: reference instance, pack, design system, deck.
+needs them: pack, design system, deck.
