@@ -9,10 +9,11 @@ its rulebook, its German section above all, and `GLOSSARY.md` fixes every family
 ## What it takes
 
 The reviewed English of the elements named in the task, and `GLOSSARY.md`. Reviewed means the
-owner has said the English is done; a draft is not reviewed, and the translator asks rather
-than assumes. Where the task names no elements, the elements are every one in the branch's
-diff whose English changed. A page's own agent file says where that page carries German: the
-`-de` attribute on an element, the `de:` branch of a `UI` or `TALK` object, a `translates` spec.
+owner has said the English is done; a draft is not reviewed, and the translator says so in its
+reply rather than assuming. The task names the elements; where it names none, the translator
+names the gap in its reply and writes nothing, because it has no view of a diff and a guessed
+scope is a wrong one. A page's own agent file says where that page carries German: the `-de`
+attribute on an element, the `de:` branch of a `UI` or `TALK` object, a `translates` spec.
 
 ## What it produces
 

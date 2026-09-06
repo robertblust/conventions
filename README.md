@@ -10,10 +10,12 @@ files every repository of the family vendors at a pinned release:
 - `conventions/GLOSSARY.md` — every family term in its fixed English and German form.
 
 A member's `AGENTS.md` opens with a block that names them and tells any agent to read them
-first, in plain words and naming no vendor. `CLAUDE.md` is the vendor adapter — `@AGENTS.md`
-and one import line per shared file — and another vendor's adapter would be added the same
-way the day it is needed. The block and the files are written by a script and checked in CI,
-so a copy that drifts from its release turns a build red rather than quietly diverging.
+first, in plain words and naming no vendor. `CLAUDE.md` is the vendor adapter, `@AGENTS.md` and
+an import line for each of `WRITING.md`, `WORKING.md` and `REPOSITORIES.md`; the two briefs and
+the glossary are read by the agent adapters below, not by every session. Another vendor's
+adapter would be added the same way the day it is needed. The block and the files are written
+by a script and checked in CI, so a copy that drifts from its release turns a build red rather
+than quietly diverging.
 
 ## Taking it into a repository
 
@@ -50,7 +52,7 @@ not. GitHub names a check from a reusable workflow after the caller and the call
 context to require in the branch ruleset is `conventions / conventions`, beside the job that
 runs the repository's own suite. To take a new release, move both tags, run `sync` and commit
 what changed. A member still on v1.2.0 runs `sync` twice the first time, because the v1.2.0
-script does not know about the file this release adds; from v1.3.0 on, the script fetches its
+script does not know about the files later releases add; from v1.3.0 on, the script fetches its
 own new version first and one `sync` is enough.
 
 Then two agent adapters, written once beside `CLAUDE.md` and kept as they are. They are a

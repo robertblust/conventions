@@ -14,12 +14,13 @@ the section on English below says what that means in spelling and marks.
 The pages carry a second language, Swiss German, de-CH. It is there because the person behind
 the family is Swiss, and a reader in Zürich or Bern is a reader the pages are written for. The
 German is a translation of the English, made after the owner has reviewed the English and never
-before, by the translator role of `TRANSLATOR.md`, in the forms Switzerland uses. It is reviewed
-by reading the translator's back-translation, an English rendering of what the German says,
-because that takes a minute where reading German prose takes an evening and the family has one
-reader for it. It appears only where a page carries it, in the value of an attribute whose name
-ends in `-de`, and nowhere else: not in code, not in git, not in a reply. A third language is
-not planned; adding one would mean writing this paragraph again with its own reason.
+before, by the translator role of `TRANSLATOR.md`, in the forms Switzerland uses. It is
+reviewed by reading the translator's back-translation, an English rendering of what the German
+says, because that takes a minute where reading German prose takes an evening and the family
+has one reader for it. It appears only where a page carries it, in the value of an attribute
+whose name ends in `-de` and in the few other places a page's own agent file names, and nowhere
+else: not in git, not in a reply. A third language is not planned; adding one would mean
+writing this paragraph again with its own reason.
 
 ## How a text is made
 

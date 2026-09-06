@@ -7,8 +7,8 @@ it and the translator has to choose, and the owner's choice is recorded here rat
 the attribute where it was first made.
 
 The German cells are inline code because the prose check reads no language and a German word
-such as `Organisation` would be a hit. This table and the German paragraph of `WRITING.md`
-are the only places the shared files carry German on purpose.
+such as `Organisation` would be a hit. This table, the German paragraph of `WRITING.md` and the
+marks `TRANSLATOR.md` repeats are the only places the shared files carry German on purpose.
 
 | Term | English | German | Note |
 |---|---|---|---|

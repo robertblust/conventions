@@ -8,10 +8,10 @@ the owner reviews a draft instead of writing one. `WRITING.md` is its rulebook, 
 ## What it takes
 
 A brief. The brief names the audience, the one point the text makes, the facts the text may
-claim and where each is shown, and the file and the place in it where the text lands. Where
-the brief lacks the audience, the point or a fact's source, the writer asks for it and writes
-nothing until it has it; a guessed audience produces a text for nobody, and a guessed fact is
-the sentence the next reviewer has to unpick.
+claim and where each is shown, and the file and the place in it where the text lands. Where the
+brief lacks the audience, the point or a fact's source, the writer names the gap in its reply
+and writes nothing until it has it; a guessed audience produces a text for nobody, and a
+guessed fact is the sentence the next reviewer has to unpick.
 
 ## What it produces
 

@@ -82,12 +82,15 @@ pages stay English in both views, as they are.
 
 ## 3. `WRITING.md`
 
-**Languages.** The paragraph on German loses “a second original, not a translation” and
-“never generated and left unread”. In their place: the German is translated from the English
-after the owner has reviewed it, by the translator role, in the forms Switzerland uses,
-and it is reviewed by reading the translator's back-translation, not by reading German. It is
-made for a reader in Zürich or Bern because the person behind the family is Swiss; that
-sentence stays. The rest of the section is unchanged.
+**Languages.** The paragraph on German loses “a second original, not a translation” and “never
+generated and left unread”. In their place: the German is translated from the English after the
+owner has reviewed it, by the translator role, in the forms Switzerland uses, and it is
+reviewed by reading the translator's back-translation, not by reading German. It is made for a
+reader in Zürich or Bern because the person behind the family is Swiss; that sentence stays.
+The clause that German is not in code goes too, because the `de:` branches and the `translates`
+specs a site's agent file names are code; the paragraph says the German appears in `-de`
+attributes and in the few other places a page's own agent file names. The rest of the section
+is unchanged.
 
 **How a text is made.** A new section after Languages, in six sentences and their reasons.
 A text starts from a brief that names the audience, the one point, the facts it may claim and
@@ -109,10 +112,10 @@ mechanism holds where a page explains, and no adjective sells.
 
 ## 4. The two briefs
 
-Both are written forward in the prose register, each under a page, with the same five
-sections: what it is for, what it takes, what it produces, what it never does, and the
-self-check it runs before it reports. Neither names a vendor, a model or a tool by product
-name; the adapter does that.
+Both are written forward in the prose register, each under a page, with the same five sections,
+the translator carrying a sixth on how the German is written: what it is for, what it takes,
+what it produces, what it never does, and the self-check it runs before it reports. Neither
+names a vendor, a model or a tool by product name; the adapter does that.
 
 **`WRITER.md`.** For: English text in the family voice, on a page, in a README, in release
 notes or in an agent file. Takes: the brief, and where the brief lacks the audience, the point
@@ -124,28 +127,28 @@ brief or the repository does not show; a word in a `-de` attribute, a `de:` bran
 first sentence carries the point; each sentence carries one idea; every claim has a source;
 the marks are the English section's; a glossary term is in the glossary's form.
 
-**`TRANSLATOR.md`.** For: the German of an element whose English the owner has reviewed.
-Takes: the reviewed English, the glossary, and the elements named; where the task names no
-elements, every element in the diff whose English changed. Produces: the German in the
-element's `-de` attribute, or in the `de:` branch or `translates` spec the page's own agent
-file names, with the markup inside the attribute kept and only its text replaced; and a reply
-carrying one row per element: the English, the German, and the German read back into plain
-English. Where German needed a different number of sentences, the row says so. Never: an
-English word changed; an element whose English is not reviewed; a glossary term in any other
-form; a `-de` on a page whose note says the model's words stay English; a commit. The German
-section of `WRITING.md` is its rulebook: Sie, ss, guillemets, the spaced en-dash, Swiss dates
-and the typographic apostrophe, and German syntax rather than English syntax in German words.
-Self-check: the back-translation means what the English means; every glossary term is in its
-form; the marks are the German section's; the attribute's quote character does not appear in
-its value.
+**`TRANSLATOR.md`.** For: the German of an element whose English the owner has reviewed. Takes:
+the reviewed English, the glossary, and the elements the task names; where it names none, the
+translator names the gap in its reply and writes nothing, because its adapter gives it no shell
+to read a diff. Produces: the German in the element's `-de` attribute, or in the `de:` branch
+or `translates` spec the page's own agent file names, with the markup inside the attribute kept
+and only its text replaced; and a reply carrying one row per element: the English, the German,
+and the German read back into plain English. Where German needed a different number of
+sentences, the row says so. Never: an English word changed; an element whose English is not
+reviewed; a glossary term in any other form; a `-de` on a page whose note says the model's
+words stay English; a commit. The German section of `WRITING.md` is its rulebook: Sie, ss,
+guillemets, the spaced en-dash, Swiss dates and the typographic apostrophe, and German syntax
+rather than English syntax in German words. Self-check: the back-translation means what the
+English means; every glossary term is in its form; the marks are the German section's; the
+attribute's quote character does not appear in its value.
 
 ## 5. `GLOSSARY.md`
 
 One table: the term, its English form, its German form, and a note where the choice needs a
 reason. German cells are inline code, because the prose check reads no language and a German
-word such as `Organisation` would be a hit; the note under the table says so, and it is the
-one place in the shared files where German is quoted on purpose beside `WRITING.md`'s
-paragraph.
+word such as `Organisation` would be a hit; the note under the table says so, and it is one of
+three places the shared files carry German on purpose, beside `WRITING.md`'s paragraph and the
+marks `TRANSLATOR.md` repeats.
 
 The seed is the terms `REPOSITORIES.md` uses for what each repository is, and every family
 noun the three landing pages carry: CompanyGraph, GuestGraph, guest identity graph, identity
