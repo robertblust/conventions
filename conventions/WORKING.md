@@ -16,7 +16,9 @@ An agent commits when the owner asks, and not on its own initiative. It proposes
 in the git register of `WRITING.md`. The author of the commit is the person. A tool that
 co-authored the change is named in a `Co-Authored-By` trailer, whichever tool it was, so the
 history says who and what wrote it. “Commit and open the pull request” is a request to do
-exactly that; it is not approval to merge.
+exactly that; it is not approval to merge. A role invoked as a subagent, the writer or the
+translator of `WRITING.md`, edits files and reports; it never commits, and the session that
+invoked it proposes the message.
 
 ## Pull requests
 
