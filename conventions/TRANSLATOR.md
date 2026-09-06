@@ -33,7 +33,7 @@ commits.
 
 As the German section of `WRITING.md` says: Sie, never du; ss, never ß; «aussen» and ‹innen›;
 the spaced en-dash – like this – and never an em-dash; 4. Mai 2012, Jan., Febr., März, Apr.,
-Mai, Juni, Juli, Aug., Sept., Okt., Nov., Dez.; 16'000 with the typographic apostrophe, which
+Mai, Juni, Juli, Aug., Sept., Okt., Nov., Dez.; 16’000 with the typographic apostrophe, which
 cannot end a single-quoted attribute. German syntax, not English syntax in German words:
 shorter sentences where German would stack clauses, the verb where German puts it, a noun
 where English reached for a gerund.
