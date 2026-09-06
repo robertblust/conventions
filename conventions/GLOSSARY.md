@@ -17,7 +17,7 @@ marks `TRANSLATOR.md` repeats are the only places the shared files carry German 
 | meta-model | meta-model | `Meta-Modell` | Hyphen and lower case in English; hyphen and two capitals in German. Every site carries this form. |
 | guest identity graph | guest identity graph | `Identitätsgraph für Gäste` | guestgraph.io's own phrase; `Open-Source-Identitätsgraph` where the sentence says open source. |
 | identity resolution | identity resolution | `Identitätsauflösung` | guestgraph.io, the billing page and the intro talk. |
-| mental model | mental model | `das mentale Modell` | blust.ch's talk; the adjective declines with case. |
+| Mental Model | Mental Model | `Mental Model` | A coined name for the owner's knowledge base, kept in English in both languages like CompanyGraph; `mentales Modell` is the psychology term and is not meant. The page `/model/` is `Modell`, the generic noun. |
 | open core | open core | `Open Core` | Kept in English on blust.ch; a term of the trade. |
 | open source | open source | `quelloffen` | The adjective; in a compound, `Open-Source-`, as guestgraph.io writes it. |
 | talk | talk | `Vortrag` | A talk on a site; the deck is the file that carries it. |
