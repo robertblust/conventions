@@ -21,6 +21,7 @@ marks `TRANSLATOR.md` repeats are the only places the shared files carry German 
 | open core | open core | `Open Core` | Kept in English on blust.ch; a term of the trade. |
 | open source | open source | `quelloffen` | The adjective; in a compound, `Open-Source-`, as guestgraph.io writes it. |
 | talk | talk | `Vortrag` | A talk on a site; the deck is the file that carries it. |
+| figure | figure | `Diagramm` | The drawn graph on a model page. The owner's choice over `Zeichnung`, which reads as a drawing by hand. |
 
 English forms fixed here whose German no page carries yet, to be chosen the first time a text
 needs them: reference instance, pack, design system, deck.
