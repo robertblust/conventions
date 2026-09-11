@@ -183,6 +183,70 @@ printf '# clean\n' > "$P/docs/kept/a.md"
 if [ -x "$HERE/conventions/conventions-check" ]; then ok "conventions-check is executable"; else bad "conventions-check is not executable"; fi
 if grep -q 'conventions-check' "$HERE/conventions/conventions-sync"; then ok "the sync script vendors conventions-check"; else bad "the sync script does not vendor conventions-check"; fi
 
+# --- conventions-check: the README title -----------------------------------------------------
+# A fixture, not a clone: CONVENTIONS_REPO is what a tree with no remote and no runner uses to
+# say which row is its own. The table here is two rows of the real shape, one ordinary member
+# and one site, because the site is the case that must need no clause in the check.
+T=$TMP/title
+mkdir -p "$T/conventions"
+tcheck() { (cd "$T" && CONVENTIONS_REPO="$1" sh "$HERE/conventions/conventions-check"); }
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$T/conventions.json"
+cat > "$T/conventions/REPOSITORIES.md" <<'EOF'
+# Repositories
+
+| Repository | Title | Purpose | Default branch | Local path |
+|---|---|---|---|---|
+| robertblust/design | Robert Blust — Design | the design system | main | ~/git/robertblust/design |
+| robertblust/robertblust.github.io | blust.ch | the profile page | main | ~/git/robertblust/robertblust.github.io |
+EOF
+
+printf '# Robert Blust — Design\n\nThe design system.\n' > "$T/README.md"
+if tcheck robertblust/design > /dev/null
+then ok "a README whose title is its row passes"
+else bad "a matching title failed: $(tcheck robertblust/design 2>&1)"
+fi
+
+printf '# @robertblust/design\n\nThe design system.\n' > "$T/README.md"
+out=$(tcheck robertblust/design 2>&1 || true)
+if echo "$out" | grep -q 'README.md:1: first line is "# @robertblust/design", REPOSITORIES.md asks for "# Robert Blust — Design"'
+then ok "a wrong title names what was found and what the row asks for"
+else bad "a wrong title was not named: $out"
+fi
+
+printf 'Robert Blust — Design\n\nNo H1 at all.\n' > "$T/README.md"
+out=$(tcheck robertblust/design 2>&1 || true)
+if echo "$out" | grep -q 'first line is "Robert Blust — Design", REPOSITORIES.md asks for "# Robert Blust — Design"'
+then ok "a first line that is not an H1 is told apart from the title it resembles"
+else bad "a missing H1 was not distinguished: $out"
+fi
+
+printf '# blust.ch\n\nThe profile page.\n' > "$T/README.md"
+if tcheck robertblust/robertblust.github.io > /dev/null
+then ok "a site's row is its domain and needs no clause in the check"
+else bad "a site row failed: $(tcheck robertblust/robertblust.github.io 2>&1)"
+fi
+
+printf '# Robert Blust — Design\n\nThe design system.\n' > "$T/README.md"
+out=$(tcheck robertblust/somewhere-else 2>&1 || true)
+if echo "$out" | grep -q 'robertblust/somewhere-else is not in REPOSITORIES.md'
+then ok "a repository outside the family is not held to the list"
+else bad "a repository outside the family was held to the list: $out"
+fi
+
+out=$( (cd "$T" && unset CONVENTIONS_REPO GITHUB_REPOSITORY; sh "$HERE/conventions/conventions-check") 2>&1 || true)
+if echo "$out" | grep -q 'no repository identity here'
+then ok "a tree with no identity passes with a line saying why"
+else bad "a tree with no identity did not pass quietly: $out"
+fi
+
+mv "$T/conventions/REPOSITORIES.md" "$T/conventions/REPOSITORIES.md.away"
+out=$(tcheck robertblust/design 2>&1 || true)
+if echo "$out" | grep -q 'no conventions/REPOSITORIES.md here'
+then ok "a tree that has not vendored the list passes with a line saying why"
+else bad "a tree without the list did not pass quietly: $out"
+fi
+mv "$T/conventions/REPOSITORIES.md.away" "$T/conventions/REPOSITORIES.md"
+
 # the workflow's declared release and the marker version cannot drift apart
 workflow_release=$(sed -n 's/^ *CONVENTIONS_RELEASE: *//p' "$HERE/.github/workflows/check.yml")
 marker_version=$(sed -n '1s/.*· \(v[^ ]*\) -->.*/\1/p' "$HERE/AGENTS.md")

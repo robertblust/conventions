@@ -1,4 +1,4 @@
-# conventions
+# Robert Blust — Conventions
 
 How the robertblust, guestgraph and companygraph organizations write and work, in six
 files every repository of the family vendors at a pinned release:
