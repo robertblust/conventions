@@ -129,11 +129,13 @@ be used by and which the family list does not govern. A tree with no
 already reports in its own words.
 
 Where identity and row are both found, the check reads the first line of `$ROOT/README.md` and
-compares it to `# ` and the row's title. A first line that is not an H1 at all is the same
-failure as a wrong one, reported with what was found:
+compares it to the row's title with its `# `, whole line against whole line. A first line that
+is not an H1 at all is the same failure as a wrong one, and comparing whole lines is what lets
+the message show the difference — reporting the title alone would print two identical strings
+and name no fault:
 
 ```
-✗ README.md:1: title is "@robertblust/design", REPOSITORIES.md says "Robert Blust — Design"
+✗ README.md:1: first line is "# @robertblust/design", REPOSITORIES.md asks for "# Robert Blust — Design"
 ```
 
 The comparison is exact, byte for byte after trailing whitespace is dropped. An em-dash that
