@@ -482,12 +482,14 @@ cd ~/git/robertblust/design
 git checkout main && git pull && git checkout -b conventions-v1-10-0
 sed -i '' 's#"tag": "v[0-9.]*"#"tag": "v1.10.0"#' conventions.json
 sh conventions/conventions-sync sync
-sed -i '' 's#check.yml@v[0-9.]*#check.yml@v1.10.0#' .github/workflows/*.yml
+sed -i '' 's#conventions/.github/workflows/check.yml@v[0-9.]*#conventions/.github/workflows/check.yml@v1.10.0#' .github/workflows/*.yml
 sed -i '' '1s/.*/# Robert Blust — Design/' README.md
 sh conventions/conventions-check; echo "check exit=$?"
 ```
 
-Expected: `✓ every Markdown file follows WRITING.md` and `check exit=0`. A member whose title is already its row skips the two README lines and runs the check to confirm.
+Expected: `✓ every Markdown file follows WRITING.md` and `check exit=0`. A member whose title is already its row skips the README line and runs the check to confirm.
+
+The pattern is anchored on `conventions/.github/workflows/` and not on `check.yml@` alone, because `check.yml@` is a substring of `instance-check.yml@`: mental-model calls meta-model's `instance-check.yml` beside the conventions workflow, and the loose pattern moved that pin to a tag meta-model has never published. Whatever the wave, read `grep -rn "yml@" .github/workflows/` afterward and see that only the intended line moved.
 
 - [ ] **Step 3: Commit and open each pull request, then stop**
 
