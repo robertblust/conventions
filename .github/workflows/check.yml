@@ -5,7 +5,7 @@ name: conventions
 on:
   workflow_call:
 env:
-  CONVENTIONS_RELEASE: v1.11.0
+  CONVENTIONS_RELEASE: v1.11.1
 jobs:
   conventions:
     name: conventions
@@ -20,7 +20,7 @@ jobs:
           [ -f conventions.json ] || { echo "✗ conventions: no conventions.json here — a member names the release it follows" >&2; exit 1; }
           pin=$(sed -n 's/.*"tag" *: *"\([^"]*\)".*/\1/p' conventions.json | head -1)
           if [ "$CONVENTIONS_RELEASE" != "$pin" ]; then
-            echo "✗ conventions: this workflow is release $CONVENTIONS_RELEASE, conventions.json names $pin — call it at the tag conventions.json names" >&2
+            echo "✗ conventions: this workflow is release $CONVENTIONS_RELEASE, conventions.json names $pin — to take $CONVENTIONS_RELEASE, set the tag in conventions.json to it and run sh conventions/conventions-sync sync; to stay on $pin, call check.yml at $pin" >&2
             exit 1
           fi
           echo "✓ conventions: workflow and pin agree on $pin"
