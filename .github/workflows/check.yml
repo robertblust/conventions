@@ -5,7 +5,7 @@ name: conventions
 on:
   workflow_call:
 env:
-  CONVENTIONS_RELEASE: v1.11.1
+  CONVENTIONS_RELEASE: v1.12.0
 jobs:
   conventions:
     name: conventions
