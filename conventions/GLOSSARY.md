@@ -35,6 +35,17 @@ marks `TRANSLATOR.md` repeats are the only places the shared files carry German 
 | build | build | `Build` | What a repository runs to write a page or a built surface from the model. Kept English like `Connector`; masculine, `der Build`. |
 | pin | pin | `Pin` | The visible line in which one repository takes another's release or commit; the participle is `gepinnt`. Masculine, `der Pin`. |
 | commit | commit | `Commit` | A git commit, and the one a pin names. Masculine, `der Commit`; plural `die Commits`. |
+| MCP | MCP | `MCP` | The protocol an agent reads a model over. A name, English in both languages, and it compounds with a hyphen. |
+| MCP server | MCP server | `MCP-Server` | The server that answers over MCP; `companygraph/mcp-server` is the package. Masculine, `der MCP-Server`. |
+| MCP Registry | MCP Registry | `MCP Registry` | The public index a server is published to. A proper name, English in both languages, and feminine: `in der MCP Registry`, never `im`. No page carried German for it before, which is why the gender is recorded here rather than left to the next sentence. |
+| AI agent | AI agent | `KI-Agent` | The reader a model serves beside a person. Masculine, `der KI-Agent`, plural `die KI-Agenten`, the form blust.ch's ideas page already uses. |
+| read-only | read-only | `nur lesend` | Of a server that answers and never writes. Not `schreibgeschützt`, which says write-protected and describes what may be done to a file rather than what a server offers. |
+| shipped | shipped | `ausgeliefert` | Of a thing released and running, as against designed or built. Not `gebaut`, which says only built, and not `fertig`, which says finished. |
+| entity | entity | `Entität` | One file in the model, of whatever type. The form blust.ch's model page uses. |
+| type | type | `Typ` | One of the types a schema declares; plural `Typen`, and `Kerntypen` for core's own, as blust.ch's ideas page writes it. |
+| claim | claim | `Anspruch` | What a profile asserts of itself and a page then has to show. blust.ch's model page: `Ein Anspruch ohne konkreten Beleg daneben ist im Modell ein Fehler`. |
+| evidence | evidence | `Beleg` | The fact a claim rests on, in the cell beside it. Same sentence as above. |
+| declare | declares | `deklariert` | Of what a schema states a type carries, or an instance states of itself. Not `erklärt`, which reads as explains. |
 
 English forms fixed here whose German no page carries yet, to be chosen the first time a text
 needs them: pack, design system, deck.
