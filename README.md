@@ -91,6 +91,14 @@ be a hit:
 { "repo": "robertblust/conventions", "tag": "v1.6.0", "exclude": ["meta"] }
 ```
 
+The same job holds every member's Markdown to the one form `WRITING.md` gives it, with the
+rules in `conventions/markdown.markdownlint-cli2.jsonc` and `conventions/markdown-rules.cjs`, so
+a table an editor reformatted fails until it is back in the family's form.
+`sh conventions/conventions-format` names each file and line that differs and
+`sh conventions/conventions-format fix` rewrites them. It reads the same files as the prose
+check, `exclude` included, and it needs Node 22 or later, since the rules are markdownlint's and
+npx fetches the version the script pins.
+
 ## Layout
 
 The repository mirrors what it vendors. The shared files sit under `conventions/` here
@@ -108,9 +116,10 @@ the version in the first line of `AGENTS.md` to the new tag, and set `CONVENTION
 
 ## Tests
 
-`sh test/run.sh` runs both scripts against temporary members with this checkout as the source.
-`sh conventions/conventions-check` runs over this checkout itself, `docs/superpowers/` excluded
+`sh test/run.sh` runs the scripts against temporary members with this checkout as the source.
+`sh conventions/conventions-check` and `sh conventions/conventions-format` run over this
+checkout itself, `docs/superpowers/` excluded
 because a spec or plan quotes the list it scans for, and `.superpowers/` excluded beside it as
-tooling scratch, not prose. CI runs both, and `shellcheck` over the shell.
+tooling scratch, not prose. CI runs all three, and `shellcheck` over the shell.
 
 Apache 2.0.
