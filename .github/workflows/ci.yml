@@ -10,7 +10,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
-      - run: shellcheck conventions/conventions-sync conventions/conventions-check test/run.sh
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: shellcheck conventions/conventions-sync conventions/conventions-check conventions/conventions-format test/run.sh
       - run: python3 -c "import yaml; [yaml.safe_load(open(f)) for f in ('.github/workflows/check.yml', '.github/workflows/ci.yml')]"
       - run: sh test/run.sh
       - run: sh conventions/conventions-check
+      - run: sh conventions/conventions-format

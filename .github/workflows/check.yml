@@ -5,7 +5,7 @@ name: conventions
 on:
   workflow_call:
 env:
-  CONVENTIONS_RELEASE: v1.18.0
+  CONVENTIONS_RELEASE: v1.19.0
 jobs:
   conventions:
     name: conventions
@@ -26,3 +26,9 @@ jobs:
           echo "✓ conventions: workflow and pin agree on $pin"
       - run: sh conventions/conventions-sync check
       - run: sh conventions/conventions-check
+      # The Markdown form is markdownlint's, which needs Node 22 or later; the runner's default
+      # Node is whatever the image ships, so the version is named here rather than assumed.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: sh conventions/conventions-format

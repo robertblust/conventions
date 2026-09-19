@@ -18,10 +18,11 @@ printf '# member — working conventions\n\nIts own text.\n' > "$MEMBER/AGENTS.m
 
 # sync vendors the files and writes the block
 run sync > /dev/null
-for f in WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md AGENTS.md conventions-sync conventions-check manifest.json; do
+for f in WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md AGENTS.md conventions-sync conventions-check conventions-format markdown.markdownlint-cli2.jsonc markdown-rules.cjs manifest.json; do
   [ -f "$MEMBER/conventions/$f" ] || bad "sync did not write conventions/$f"
 done
 if [ -x "$MEMBER/conventions/conventions-check" ]; then ok "conventions-check is vendored executable"; else bad "conventions-check is not vendored executable"; fi
+if [ -x "$MEMBER/conventions/conventions-format" ]; then ok "conventions-format is vendored executable"; else bad "conventions-format is not vendored executable"; fi
 if grep -q '^<!-- conventions · v1.0.0 -->$' "$MEMBER/AGENTS.md" && grep -q '^<!-- end conventions -->$' "$MEMBER/AGENTS.md"
 then ok "sync writes the block with the pinned tag"; else bad "block missing or unversioned"; fi
 if head -1 "$MEMBER/AGENTS.md" | grep -q '^<!-- conventions'; then ok "the block is the first line"; else bad "the block is not first"; fi
@@ -78,7 +79,7 @@ if echo "$out" | grep -q '^usage:'; then ok "an unknown command prints usage"; e
 # binary, which lacks the mechanism entirely and still needs sync run twice — see README.md.
 SELFUPDATING=$TMP/selfupdating-conventions-sync
 cp "$HERE/conventions/conventions-sync" "$SELFUPDATING"
-sed -i.bak 's/^FILES="\(.*\) conventions-check"$/FILES="\1"/' "$SELFUPDATING" && rm -f "$SELFUPDATING.bak"
+sed -i.bak 's/^FILES="\(.*\) conventions-check.*"$/FILES="\1"/' "$SELFUPDATING" && rm -f "$SELFUPDATING.bak"
 if grep '^FILES=' "$SELFUPDATING" | grep -q conventions-check; then bad "the trimmed FILES still names conventions-check"; fi
 UPGRADE=$TMP/upgrade
 mkdir -p "$UPGRADE"
@@ -246,6 +247,78 @@ then ok "a tree that has not vendored the list passes with a line saying why"
 else bad "a tree without the list did not pass quietly: $out"
 fi
 mv "$T/conventions/REPOSITORIES.md.away" "$T/conventions/REPOSITORIES.md"
+
+# --- conventions-format: the one Markdown form ---------------------------------------------
+# These run the real tool through npx, so they need Node 22 or later and, the first time, a
+# network; CI has both. A machine without npx fails here rather than passing unseen.
+F=$TMP/form
+mkdir -p "$F/conventions" "$F/docs" "$F/vendored" "$F/node_modules/pkg" "$F/.claude/agents"
+cp "$HERE/conventions/markdown.markdownlint-cli2.jsonc" "$HERE/conventions/markdown-rules.cjs" "$F/conventions/"
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0", "exclude": ["vendored"] }\n' > "$F/conventions.json"
+fcheck() { CONVENTIONS_ROOT="$F" sh "$HERE/conventions/conventions-format" "$@"; }
+# The table the way an editor that lines columns up writes it, alignment colons included, and
+# the same table in the family's form.
+cat > "$TMP/padded.md" <<'EOF'
+# B
+
+| Field     | Type | Count |
+|:--------- | ---- | ----: |
+| `a`       | text |     1 |
+EOF
+cat > "$TMP/compact.md" <<'EOF'
+# B
+
+| Field | Type | Count |
+| :--- | --- | ---: |
+| `a` | text | 1 |
+EOF
+if ! command -v npx > /dev/null 2>&1; then
+  bad "npx is not on the PATH, so the Markdown form was not tested"
+else
+  cat > "$F/docs/a.md" <<'EOF'
+# A
+
+| Field | Type |
+| --- | --- |
+| `a` | text |
+
+Some *em* and **strong**.
+
+- one
+- two
+EOF
+  if fcheck > /dev/null 2>&1; then ok "a file in the form passes"; else bad "a file in the form failed: $(fcheck 2>&1)"; fi
+
+  cp "$TMP/padded.md" "$F/docs/b [draft].md"
+  out=$(fcheck 2>&1 || true)
+  if echo "$out" | grep -q 'docs/b \[draft\].md:3: MD060/table-column-style' && echo "$out" | grep -q 'docs/b \[draft\].md:4: table-delimiter-row'
+  then ok "a padded table is named by line and rule, in a file whose name has brackets"
+  else bad "a padded table was not named: $out"
+  fi
+  if fcheck fix > /dev/null 2>&1 && cmp -s "$F/docs/b [draft].md" "$TMP/compact.md"
+  then ok "fix writes the compact table, delimiter row and alignment colons included"
+  else bad "fix did not write the compact table: $(cat "$F/docs/b [draft].md")"
+  fi
+
+  printf '# C\n\n* a list in stars and _emphasis_ in underscores\n' > "$F/docs/c.md"
+  if fcheck fix > /dev/null 2>&1 && [ "$(cat "$F/docs/c.md")" = "$(printf '# C\n\n- a list in stars and *emphasis* in underscores')" ]
+  then ok "fix writes dashes for a list and asterisks for emphasis"
+  else bad "fix did not write dashes and asterisks: $(cat "$F/docs/c.md")"
+  fi
+
+  cp "$TMP/padded.md" "$F/vendored/v.md"
+  cp "$TMP/padded.md" "$F/node_modules/pkg/README.md"
+  if fcheck > /dev/null 2>&1; then ok "an excluded folder and node_modules are not read"; else bad "an excluded folder or node_modules was read: $(fcheck 2>&1)"; fi
+
+  cp "$TMP/padded.md" "$F/.claude/agents/w.md"
+  out=$(fcheck 2>&1 || true)
+  if echo "$out" | grep -q '.claude/agents/w.md:4'; then ok "a folder whose name starts with a dot is read"; else bad "a dot folder was skipped: $out"; fi
+  rm "$F/.claude/agents/w.md"
+
+  rm "$F/conventions/markdown.markdownlint-cli2.jsonc"
+  out=$(fcheck 2>&1 || true)
+  if echo "$out" | grep -q 'no conventions/markdown.markdownlint-cli2.jsonc'; then ok "a member without the rules is told to sync"; else bad "missing rules were not reported: $out"; fi
+fi
 
 # the workflow's declared release and the marker version cannot drift apart
 workflow_release=$(sed -n 's/^ *CONVENTIONS_RELEASE: *//p' "$HERE/.github/workflows/check.yml")
