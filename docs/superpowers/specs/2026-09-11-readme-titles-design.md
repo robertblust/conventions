@@ -81,7 +81,7 @@ the list reads them in that order. The column is the full title, the em-dash inc
 as the README must spell it.
 
 | Repository | Title |
-|---|---|
+| --- | --- |
 | robertblust/conventions | Robert Blust — Conventions |
 | robertblust/design | Robert Blust — Design |
 | robertblust/robertblust.github.io | blust.ch |
