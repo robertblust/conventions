@@ -95,9 +95,18 @@ The same job holds every member's Markdown to the one form `WRITING.md` gives it
 rules in `conventions/markdown.markdownlint-cli2.jsonc` and `conventions/markdown-rules.cjs`, so
 a table an editor reformatted fails until it is back in the family's form.
 `sh conventions/conventions-format` names each file and line that differs and
-`sh conventions/conventions-format fix` rewrites them. It reads the same files as the prose
-check, `exclude` included, and it needs Node 22 or later, since the rules are markdownlint's and
-npx fetches the version the script pins.
+`sh conventions/conventions-format fix` rewrites them. It needs Node 22 or later, since the rules
+are markdownlint's and npx fetches the version the script pins.
+
+The form has its own list of what it leaves alone, `format-exclude`, because the two checks skip
+a folder for different reasons. The prose check skips a spec that quotes the words it scans for,
+and nothing about that spec's tables is anyone else's; the form skips what another repository
+formats, a vendored copy or a fixture. A member that names no `format-exclude` is formatted as
+its `exclude` says:
+
+```json
+{ "repo": "robertblust/conventions", "tag": "v1.20.0", "exclude": ["meta", "docs/superpowers"], "format-exclude": ["meta"] }
+```
 
 ## Layout
 
@@ -118,8 +127,8 @@ the version in the first line of `AGENTS.md` to the new tag, and set `CONVENTION
 
 `sh test/run.sh` runs the scripts against temporary members with this checkout as the source.
 `sh conventions/conventions-check` and `sh conventions/conventions-format` run over this
-checkout itself, `docs/superpowers/` excluded
-because a spec or plan quotes the list it scans for, and `.superpowers/` excluded beside it as
-tooling scratch, not prose. CI runs all three, and `shellcheck` over the shell.
+checkout itself. The prose check leaves out `docs/superpowers/`, because a spec or plan quotes
+the list it scans for, and the form does not; both leave out `.superpowers/`, tooling scratch
+that is not prose. CI runs all three, and `shellcheck` over the shell.
 
 Apache 2.0.

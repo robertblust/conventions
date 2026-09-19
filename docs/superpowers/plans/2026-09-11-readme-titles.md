@@ -454,7 +454,7 @@ The order is the one `conventions/REPOSITORIES.md` prescribes and this plan does
 **The six first lines, old and new.** Every other member's README line 1 is already its row and is not touched.
 
 | Repository | `README.md:1` becomes |
-|---|---|
+| --- | --- |
 | robertblust/design | `# Robert Blust — Design` |
 | robertblust/mental-model | `# Robert Blust — Mental Model` |
 | robertblust/field-notes | `# Robert Blust — Field Notes` |

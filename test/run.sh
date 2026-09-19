@@ -310,6 +310,25 @@ EOF
   cp "$TMP/padded.md" "$F/node_modules/pkg/README.md"
   if fcheck > /dev/null 2>&1; then ok "an excluded folder and node_modules are not read"; else bad "an excluded folder or node_modules was read: $(fcheck 2>&1)"; fi
 
+  # format-exclude is the form's own list: where it is named it replaces exclude, so a folder the
+  # prose check skips is formatted, and an empty list formats everything but node_modules.
+  mkdir -p "$F/specs"
+  cp "$TMP/padded.md" "$F/specs/s.md"
+  printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0", "exclude": ["vendored", "specs"], "format-exclude": ["vendored"] }\n' > "$F/conventions.json"
+  out=$(fcheck 2>&1 || true)
+  if echo "$out" | grep -q 'specs/s.md:3' && ! echo "$out" | grep -q 'vendored/v.md'
+  then ok "format-exclude replaces exclude: a folder only the prose check skips is formatted"
+  else bad "format-exclude did not replace exclude: $out"
+  fi
+  printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0", "exclude": ["vendored"], "format-exclude": [] }\n' > "$F/conventions.json"
+  out=$(fcheck 2>&1 || true)
+  if echo "$out" | grep -q 'vendored/v.md:3' && ! echo "$out" | grep -q 'node_modules'
+  then ok "an empty format-exclude formats every folder but node_modules"
+  else bad "an empty format-exclude still skipped a folder: $out"
+  fi
+  rm -r "$F/specs"
+  printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0", "exclude": ["vendored"] }\n' > "$F/conventions.json"
+
   cp "$TMP/padded.md" "$F/.claude/agents/w.md"
   out=$(fcheck 2>&1 || true)
   if echo "$out" | grep -q '.claude/agents/w.md:4'; then ok "a folder whose name starts with a dot is read"; else bad "a dot folder was skipped: $out"; fi
