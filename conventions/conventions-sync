@@ -9,7 +9,7 @@
 # The pin is conventions.json in the member's root: {"repo": "robertblust/conventions", "tag": "v1.0.0"}.
 # Files come from https://raw.githubusercontent.com/<repo>/<tag>; CONVENTIONS_SOURCE overrides
 # that with another base URL or a local directory, which is how the tests run offline.
-# Needs sh, curl, awk, sed, and shasum or sha256sum. Nothing else.
+# Needs sh, curl, awk, sed, cp, and shasum or sha256sum, and no language runtime.
 set -eu
 
 usage() { echo "usage: sh conventions/conventions-sync sync|check" >&2; exit 2; }
@@ -37,7 +37,7 @@ SEEDS="conventions/vscode-settings.json:.vscode/settings.json conventions/vscode
 # What an earlier release vendored and this one does not. sync deletes them, so a member that
 # upgrades is left with one copy of a rule rather than two, and check names one still lying
 # around, which is a member that has not synced.
-RETIRED="conventions/markdown.markdownlint-cli2.jsonc"
+RETIRED="$DIR/markdown.markdownlint-cli2.jsonc"
 OPEN_RE='^<!-- conventions · v[^ ]* -->$'
 CLOSE='<!-- end conventions -->'
 

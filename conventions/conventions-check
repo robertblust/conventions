@@ -12,6 +12,14 @@
 set -eu
 
 ROOT=${CONVENTIONS_ROOT:-.}
+
+# The scan is run from the root, as conventions-format is and for the same reason: git resolves a
+# path against the directory it runs in, so a relative root handed to check-ignore would be
+# counted twice and the filter below would quietly match nothing. The name the caller gave is
+# kept for the one message that names it.
+NAMED=$ROOT
+cd "$ROOT" 2> /dev/null || { echo "✗ conventions: no Markdown file was scanned under $NAMED" >&2; exit 1; }
+ROOT=.
 PIN=$ROOT/conventions.json
 
 # Stems, not words, so derived forms are caught; a stem is anchored wherever an American word
@@ -50,17 +58,20 @@ set -- "$@" -name '*.md' -type f -print
 # reports a bare ✓ for a tree it never opened.
 files=$(find "$@" 2> /dev/null | LC_ALL=C sort || true)
 
-# What git ignores is not the repository's prose, for the reason conventions-format gives: the
-# shared job checks out tracked files only, so an ignored folder is absent there and present
-# here, and a local run that read it would report hits the job can never see. check-ignore
-# echoes back each path as it was handed over, so the list stays in the walk's own spelling.
-if command -v git > /dev/null 2>&1 && git -C "$ROOT" rev-parse --git-dir > /dev/null 2>&1; then
-  ignored=$(printf '%s\n' "$files" | git -C "$ROOT" check-ignore --stdin 2> /dev/null) || ignored=""
+# What git ignores is scratch, not the repository's prose, for the reason conventions-format
+# gives: it is absent from the shared job, which checks out tracked files only, so a local run
+# that read it would report hits no reviewer can act on. A file that is merely new is still
+# read. check-ignore echoes each path back as it was handed over, so the list stays in the
+# walk's own spelling and nothing has to be rebuilt from it.
+# core.quotePath is off because git C-quotes a path with a non-ASCII byte in it — a de-CH file
+# name with an umlaut — and a quoted path matches nothing in the list it came from.
+if command -v git > /dev/null 2>&1 && git rev-parse --git-dir > /dev/null 2>&1; then
+  ignored=$(printf '%s\n' "$files" | git -c core.quotePath=false check-ignore --stdin 2> /dev/null) || ignored=""
   [ -z "$ignored" ] || files=$(printf '%s\n' "$files" | grep -vxF "$ignored" || true)
 fi
 
 if [ -z "$files" ]; then
-  echo "✗ conventions: no Markdown file was scanned under $ROOT" >&2
+  echo "✗ conventions: no Markdown file was scanned under $NAMED" >&2
   exit 1
 fi
 
