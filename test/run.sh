@@ -379,6 +379,35 @@ EOF
   fi
   rm "$F/docs/d.md"
 
+  # A paragraph is one line, and the three blocks whose breaks are content keep theirs: a
+  # blockquote, a list item and a paragraph carrying a hard break. Written as one file because a
+  # rule that joined any of them would be found only by a fixture that holds all four together.
+  printf '# E\n\nA paragraph that\nspans three\nsource lines.\n\n> A tagline that\n> wraps.\n\n- An item that\n  continues.\n\nA hard break  \nkeeps its line.\n' > "$F/docs/e.md"
+  out=$(fcheck 2>&1 || true)
+  if echo "$out" | grep -q 'docs/e.md:3: paragraph-on-one-line' && ! echo "$out" | grep -q 'docs/e.md:7\|docs/e.md:10\|docs/e.md:13'
+  then ok "a wrapped paragraph is named, and the blockquote, list item and hard break are not"
+  else bad "the paragraph rule did not fire as it should: $out"
+  fi
+  if fcheck fix > /dev/null 2>&1 &&
+     [ "$(cat "$F/docs/e.md")" = "$(printf '# E\n\nA paragraph that spans three source lines.\n\n> A tagline that\n> wraps.\n\n- An item that\n  continues.\n\nA hard break  \nkeeps its line.')" ]
+  then ok "fix joins the paragraph and leaves the other three as they were"
+  else bad "fix did not join the paragraph cleanly: $(cat "$F/docs/e.md")"
+  fi
+  rm "$F/docs/e.md"
+
+  # markdownlint blanks the inside of an HTML comment in the lines it hands a rule, so that no
+  # rule fires on what a writer commented out. A fix built from those lines writes the dots back
+  # as the text, which is how the conventions block in a spec lost its words once.
+  # shellcheck disable=SC2016 # literal markdown backticks, not command substitution
+  printf '# F\n\nThe block is `<!-- conventions - vN -->` and it\nspans two lines.\n' > "$F/docs/f.md"
+  # shellcheck disable=SC2016 # literal markdown backticks, not command substitution
+  if fcheck fix > /dev/null 2>&1 &&
+     [ "$(cat "$F/docs/f.md")" = "$(printf '# F\n\nThe block is `<!-- conventions - vN -->` and it spans two lines.')" ]
+  then ok "joining a paragraph keeps the text inside an HTML comment"
+  else bad "the comment text did not survive the join: $(cat "$F/docs/f.md")"
+  fi
+  rm "$F/docs/f.md"
+
   # Every rule of the form is one the tool can write. The fixture is this repository's own
   # Markdown, because it exercises far more of the rule set than anything written for a test: a
   # rule that can only report leaves its hits standing after fix, and check then fails. A

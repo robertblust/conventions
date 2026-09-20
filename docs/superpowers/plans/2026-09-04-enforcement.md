@@ -485,8 +485,7 @@ curl -fsSL https://raw.githubusercontent.com/robertblust/conventions/v1.3.0/conv
 sh /tmp/conventions-sync sync
 ```
 
-EOF
-)"
+EOF )"
 
 ```
 
@@ -510,9 +509,7 @@ sh conventions/conventions-sync check; echo "check exit $?"
 head -1 AGENTS.md
 ```
 
-Expected: the first `sync` uses the v1.2.0 script and misses `conventions-check`; the second
-uses the v1.3.0 script it just fetched and vendors it. `check` then reads `✓ … match
-robertblust/conventions@v1.3.0`, exit 0, marker `v1.3.0`.
+Expected: the first `sync` uses the v1.2.0 script and misses `conventions-check`; the second uses the v1.3.0 script it just fetched and vendors it. `check` then reads `✓ … match robertblust/conventions@v1.3.0`, exit 0, marker `v1.3.0`.
 
 - [ ] **Step 2: Run the prose check and fix what is this repository's**
 
@@ -582,8 +579,7 @@ Expected: a check named `conventions` passes. If it fails on the tag step, the p
 
 - [ ] **Step 6: The ruleset**
 
-GitHub names a check from a reusable workflow after the caller and the called job, so read the
-exact name from `gh pr checks` on the pull request first and use it verbatim below.
+GitHub names a check from a reusable workflow after the caller and the called job, so read the exact name from `gh pr checks` on the pull request first and use it verbatim below.
 
 ```bash
 gh api -X POST repos/robertblust/mental-model/rulesets --input - <<'EOF'
