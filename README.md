@@ -1,7 +1,7 @@
 # Robert Blust — Conventions
 
-How the robertblust, guestgraph and companygraph organizations write and work, in the
-files every repository of the family vendors at a pinned release:
+How the robertblust, guestgraph and companygraph organizations write and work. Every repository
+of the family vendors this at a pinned release, and these are the files it reads first:
 
 - `conventions/WRITING.md` — one voice, three registers, English and German, and how a text is made.
 - `conventions/WORKING.md` — git and GitHub: branches, merge commits, identity, releases, pins.
@@ -107,7 +107,12 @@ hashed like everything else, so an editor and the shared job read the same rules
 edits them locally is named by `check`.
 
 Two more, `.vscode/settings.json` and `.vscode/extensions.json`, ask VS Code to format Markdown on
-save with that same library, and those two are the member's own. VS Code reads one settings file
+save with that same library, and those two are the member's own. The extension reads
+`customRules` from the rule set the same way the script does, so the delimiter-row rule runs in
+the editor too — but it is JavaScript, and VS Code runs no JavaScript from a workspace that has
+not been trusted, so the first open of a fresh clone answers that prompt before the form is whole.
+A member whose `.gitignore` covers `.vscode/` has said the editor half is not its business, and
+neither the seed nor the check holds it to one. VS Code reads one settings file
 and one recommendation file per repository and merges nothing, so a member with its own language —
 the engine's Java settings, a site's npm ones — has no second place to put them, and a copy held
 byte for byte would take that place away. So `sync` writes each only where a member has none, from

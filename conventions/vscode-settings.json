@@ -10,6 +10,10 @@
   // between them rather than one each. The key is scoped to Markdown because what formats
   // another language is the member's own business.
   //
+  // The one rule markdownlint does not ship is JavaScript, and VS Code runs no JavaScript from a
+  // workspace that has not been trusted, so a fresh clone answers that prompt before a padded
+  // table is rewritten on save. Everything else in the form applies either way.
+  //
   // files.trimTrailingWhitespace is deliberately not set. Two spaces at the end of a line are a
   // line break MD009 allows, and trimming them would rewrite prose the form accepts.
   "[markdown]": {
