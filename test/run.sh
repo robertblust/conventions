@@ -18,16 +18,29 @@ printf '# member — working conventions\n\nIts own text.\n' > "$MEMBER/AGENTS.m
 
 # sync vendors the files and writes the block
 run sync > /dev/null
-for f in WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md AGENTS.md conventions-sync conventions-check conventions-format markdown-rules.cjs manifest.json; do
+for f in WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md AGENTS.md conventions-sync conventions-check conventions-format markdown-rules.cjs vscode-settings.json vscode-extensions.json manifest.json; do
   [ -f "$MEMBER/conventions/$f" ] || bad "sync did not write conventions/$f"
 done
-# The three files a member gets at its own root, because markdownlint-cli2 and VS Code read
-# them there and nowhere else.
-for f in .markdownlint-cli2.jsonc .vscode/settings.json .vscode/extensions.json; do
-  if [ -f "$MEMBER/$f" ]; then ok "sync writes $f at the member's root"; else bad "sync did not write $f at the member's root"; fi
-done
+# The rule set goes to the member's root, because markdownlint-cli2 and the editor plugins on it
+# read it there and nowhere else.
+if [ -f "$MEMBER/.markdownlint-cli2.jsonc" ]; then ok "sync writes the rule set at the member's root"; else bad "sync did not write the rule set at the member's root"; fi
 if cmp -s "$MEMBER/.markdownlint-cli2.jsonc" "$HERE/.markdownlint-cli2.jsonc"
 then ok "the root rule set is byte-identical to the source"; else bad "the root rule set differs from the source"; fi
+# The two editor files are the member's own: written where it has none, never over one it has.
+for f in .vscode/settings.json .vscode/extensions.json; do
+  if [ -f "$MEMBER/$f" ]; then ok "sync seeds $f where a member has none"; else bad "sync did not seed $f"; fi
+done
+printf '{ "java.compile.nullAnalysis.mode": "automatic" }\n' > "$MEMBER/.vscode/settings.json"
+run sync > /dev/null
+if [ "$(cat "$MEMBER/.vscode/settings.json")" = '{ "java.compile.nullAnalysis.mode": "automatic" }' ]
+then ok "sync leaves a settings file the member already has"
+else bad "sync overwrote the member's own settings file: $(cat "$MEMBER/.vscode/settings.json")"
+fi
+if ! grep -q '"\.vscode/settings\.json"' "$MEMBER/conventions/manifest.json"
+then ok "a seeded file is not hashed into the manifest, so the member may edit it"
+else bad "a seeded file was hashed into the manifest"
+fi
+cp "$MEMBER/conventions/vscode-settings.json" "$MEMBER/.vscode/settings.json"
 if [ -x "$MEMBER/conventions/conventions-check" ]; then ok "conventions-check is vendored executable"; else bad "conventions-check is not vendored executable"; fi
 if [ -x "$MEMBER/conventions/conventions-format" ]; then ok "conventions-format is vendored executable"; else bad "conventions-format is not vendored executable"; fi
 if grep -q '^<!-- conventions · v1.0.0 -->$' "$MEMBER/AGENTS.md" && grep -q '^<!-- end conventions -->$' "$MEMBER/AGENTS.md"
@@ -38,8 +51,8 @@ if cmp -s "$MEMBER/conventions/WRITING.md" "$HERE/conventions/WRITING.md"; then 
 if [ -x "$MEMBER/conventions/conventions-sync" ]; then ok "the vendored script is executable"; else bad "the vendored script is not executable"; fi
 if grep -q '"tag": "v1.0.0"' "$MEMBER/conventions/manifest.json" && grep -q '"conventions/WORKING.md": "sha256:' "$MEMBER/conventions/manifest.json"
 then ok "the manifest records the tag and a hash per file"; else bad "the manifest is incomplete"; fi
-if grep -q '"\.markdownlint-cli2\.jsonc": "sha256:' "$MEMBER/conventions/manifest.json" && grep -q '"\.vscode/settings\.json": "sha256:' "$MEMBER/conventions/manifest.json"
-then ok "the manifest hashes a root file under its root path"; else bad "the manifest does not hash the root files"; fi
+if grep -q '"\.markdownlint-cli2\.jsonc": "sha256:' "$MEMBER/conventions/manifest.json"
+then ok "the manifest hashes a root file under its root path"; else bad "the manifest does not hash the root file"; fi
 if python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$MEMBER/conventions/manifest.json" 2> /dev/null
 then ok "the manifest is valid JSON with both lists in it"; else bad "the manifest is not valid JSON"; fi
 
@@ -58,9 +71,9 @@ if echo "$out" | grep -q 'conventions/WORKING.md differs'; then ok "check names 
 run sync > /dev/null
 
 # an edited root file is named, as an edited vendored one is
-printf '\n' >> "$MEMBER/.vscode/settings.json"
+printf '\n' >> "$MEMBER/.markdownlint-cli2.jsonc"
 out=$(run check 2>&1 || true)
-if echo "$out" | grep -q '\.vscode/settings.json differs'; then ok "check names an edited root file"; else bad "check missed an edited root file: $out"; fi
+if echo "$out" | grep -q '\.markdownlint-cli2.jsonc differs'; then ok "check names an edited root file"; else bad "check missed an edited root file: $out"; fi
 rm "$MEMBER/.markdownlint-cli2.jsonc"
 out=$(run check 2>&1 || true)
 if echo "$out" | grep -q '\.markdownlint-cli2.jsonc is missing'; then ok "check names a missing root file"; else bad "check missed a missing root file: $out"; fi
@@ -408,6 +421,57 @@ EOF
   out=$(fcheck 2>&1 || true)
   if echo "$out" | grep -q '.claude/agents/w.md:4'; then ok "a folder whose name starts with a dot is read"; else bad "a dot folder was skipped: $out"; fi
   rm "$F/.claude/agents/w.md"
+
+  # The editor's half of the form: the two .vscode files are the member's own, and what the
+  # family owns of them is one settings key and one recommended id. A member that keeps its own
+  # language settings beside them passes; one that changes the family's part does not.
+  E=$TMP/editor
+  mkdir -p "$E/conventions" "$E/.vscode" "$E/docs"
+  cp "$HERE/.markdownlint-cli2.jsonc" "$E/"
+  cp "$HERE/conventions/markdown-rules.cjs" "$HERE/conventions/vscode-settings.json" "$HERE/conventions/vscode-extensions.json" "$E/conventions/"
+  printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$E/conventions.json"
+  printf '# E\n' > "$E/docs/a.md"
+  cp "$E/conventions/vscode-settings.json" "$E/.vscode/settings.json"
+  cp "$E/conventions/vscode-extensions.json" "$E/.vscode/extensions.json"
+  echeck() { CONVENTIONS_ROOT="$E" sh "$HERE/conventions/conventions-format"; }
+  if echeck > /dev/null 2>&1; then ok "a member seeded from the release passes the editor check"; else bad "a seeded member failed: $(echeck 2>&1)"; fi
+
+  printf '{\n "[markdown]": { "editor.formatOnSave": true, "editor.defaultFormatter": "DavidAnson.vscode-markdownlint" },\n "java.compile.nullAnalysis.mode": "automatic"\n}\n' > "$E/.vscode/settings.json"
+  printf '{ "recommendations": ["redhat.java", "DavidAnson.vscode-markdownlint"] }\n' > "$E/.vscode/extensions.json"
+  if echeck > /dev/null 2>&1
+  then ok "a member keeps its own settings and extensions beside the family's"
+  else bad "a member's own settings were rejected: $(echeck 2>&1)"
+  fi
+
+  printf '{ "[markdown]": { "editor.defaultFormatter": "esbenp.prettier-vscode", "editor.formatOnSave": true } }\n' > "$E/.vscode/settings.json"
+  out=$(echeck 2>&1 || true)
+  if echo "$out" | grep -q 'its "\[markdown\]" is not the release'
+  then ok "a member that changes the family's settings key is named"
+  else bad "a changed settings key was not named: $out"
+  fi
+
+  cp "$E/conventions/vscode-settings.json" "$E/.vscode/settings.json"
+  printf '{ "recommendations": ["redhat.java"] }\n' > "$E/.vscode/extensions.json"
+  out=$(echeck 2>&1 || true)
+  if echo "$out" | grep -q 'is not recommended'
+  then ok "a member that drops the family's extension is named"
+  else bad "a dropped extension was not named: $out"
+  fi
+
+  cp "$E/conventions/vscode-extensions.json" "$E/.vscode/extensions.json"
+  rm "$E/.vscode/settings.json"
+  out=$(echeck 2>&1 || true)
+  if echo "$out" | grep -q '\.vscode/settings.json is missing'
+  then ok "a missing editor file is told to sync"
+  else bad "a missing editor file was not named: $out"
+  fi
+
+  printf '{ "[markdown]":\n' > "$E/.vscode/settings.json"
+  out=$(echeck 2>&1 || true)
+  if echo "$out" | grep -q 'not readable as JSON'
+  then ok "an editor file that does not parse is named, not skipped"
+  else bad "an unparsable editor file was not named: $out"
+  fi
 
   # What git ignores is scratch the shared job never sees, since it checks out tracked files
   # only; a local run that failed on it would fail where the job is green. The same fixture

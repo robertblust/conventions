@@ -1,17 +1,22 @@
 #!/bin/sh
 # conventions-format — hold a member's Markdown to the one form WRITING.md gives it, whatever
-# editor wrote it last. The form is the rule set in .markdownlint-cli2.jsonc at the member's root,
-# with the one rule markdownlint does not ship in conventions/markdown-rules.cjs, and the tool is
+# editor wrote it last, and hold the editor to writing it. The form is the rule set in
+# .markdownlint-cli2.jsonc at the member's root, with the one rule markdownlint does not ship in
+# conventions/markdown-rules.cjs, and the tool is
 # markdownlint-cli2 at the version below, the same library an editor plugin can bundle, so a file
 # a tool reformatted and a file a person wrote come out byte for byte the same. The rules sit at
 # the root under that name because it is the name an editor plugin discovers without being told,
-# which is how the same form reaches a writer before they push and not only afterwards.
+# which is how the same form reaches a writer before they push and not only afterwards. The two
+# files under .vscode/ that carry that arrangement are the member's own, and what the family owns
+# of them — one settings key, one recommended extension — is checked here against the copies
+# under conventions/.
 #
 #   sh conventions/conventions-format          check: exit 1 with one line per hit, file:line
 #   sh conventions/conventions-format fix      rewrite every hit into the form, in place
 #
-# Needs sh, find, sort and sed, and Node 22 or later for npx; the tool is fetched by npx on
-# first use and cached after. git is used where it is there, to leave out what it ignores. The
+# Needs sh, find, sort and sed, and Node 22 or later, for npx and for the editor check below;
+# the tool is fetched by npx on first use and cached after. git is used where it is there, to
+# leave out what it ignores. The
 # files are every Markdown file but .git, node_modules at any depth, what .gitignore names, and
 # the folders under "format-exclude" in conventions.json, or under "exclude" where a member names
 # no "format-exclude", so that a member that has not decided reads as it did.
@@ -33,6 +38,84 @@ command -v npx > /dev/null 2>&1 || { echo "✗ conventions: the Markdown form ne
 cd "$ROOT"
 ROOT=.
 PIN=$ROOT/conventions.json
+
+# The editor's half of the form. VS Code reads one settings file and one recommendation file per
+# repository and merges nothing, so those two are the member's own and conventions-sync writes
+# them only where a member has none. What the family owns is the one settings key and the one
+# recommended id, and that is what this holds a member to; every other key and every other
+# extension is the member's, which is how a repository with its own language keeps its own
+# settings. The comparison is made on parsed values, not on text, so a member may lay its file
+# out however it likes. A member that has not vendored the pair yet is not held to it.
+CANON_SETTINGS=$ROOT/conventions/vscode-settings.json
+CANON_EXTENSIONS=$ROOT/conventions/vscode-extensions.json
+if [ -f "$CANON_SETTINGS" ] && [ -f "$CANON_EXTENSIONS" ]; then
+  if ! node - "$ROOT" << 'NODE'
+const fs = require("fs");
+const root = process.argv[2];
+
+// Both files carry comments, so the comments go before JSON.parse does. The first alternative
+// matches a whole string, which keeps a // or /* inside one from starting a comment.
+const strip = (t) =>
+  t.replace(/"(?:\\.|[^"\\])*"|\/\/.*|\/\*[\s\S]*?\*\//g, (m) => (m[0] === '"' ? m : ""));
+const parse = (p) => JSON.parse(strip(fs.readFileSync(p, "utf8")));
+
+// Values are compared, not text, so a member may lay its file out however it likes. Keys are
+// sorted on the way in, so two objects that differ only in order are the same object.
+const stable = (v) => {
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return "[" + v.map(stable).join(",") + "]";
+  const keys = Object.keys(v).sort();
+  return "{" + keys.map((k) => JSON.stringify(k) + ":" + stable(v[k])).join(",") + "}";
+};
+
+let fail = 0;
+const hit = (m) => {
+  console.error("\u2717 conventions: " + m);
+  fail = 1;
+};
+
+const readOwn = (rel) => {
+  const at = root + "/" + rel;
+  if (!fs.existsSync(at)) {
+    hit(rel + " is missing — run sync, which writes it where a member has none");
+    return null;
+  }
+  try {
+    return parse(at);
+  } catch (e) {
+    hit(rel + " is not readable as JSON: " + e.message);
+    return null;
+  }
+};
+
+const wantSettings = parse(root + "/conventions/vscode-settings.json")["[markdown]"];
+const settings = readOwn(".vscode/settings.json");
+if (settings && stable(settings["[markdown]"]) !== stable(wantSettings)) {
+  hit(
+    '.vscode/settings.json: its "[markdown]" is not the release\'s — set it to ' +
+      JSON.stringify(wantSettings) +
+      ", keeping every other key"
+  );
+}
+
+const wantIds = parse(root + "/conventions/vscode-extensions.json").recommendations;
+const extensions = readOwn(".vscode/extensions.json");
+if (extensions) {
+  const have = extensions.recommendations || [];
+  for (const id of wantIds) {
+    if (!have.includes(id)) {
+      hit('.vscode/extensions.json: "' + id + '" is not recommended — add it, keeping the rest');
+    }
+  }
+}
+
+process.exitCode = fail;
+NODE
+  then
+    echo "✗ conventions: the editor does not hold the form this repository does" >&2
+    exit 1
+  fi
+fi
 
 # The folders not held to the form, one entry per line. "exclude" is the prose check's list, and
 # some of what it leaves out is prose that quotes the words it scans for, which is no reason to

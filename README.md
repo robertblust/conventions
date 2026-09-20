@@ -1,6 +1,6 @@
 # Robert Blust — Conventions
 
-How the robertblust, guestgraph and companygraph organizations write and work, in six
+How the robertblust, guestgraph and companygraph organizations write and work, in the
 files every repository of the family vendors at a pinned release:
 
 - `conventions/WRITING.md` — one voice, three registers, English and German, and how a text is made.
@@ -100,13 +100,21 @@ are markdownlint's and npx fetches the version the script pins. What git ignores
 a scratch folder a member keeps untracked does not fail a run here that the job, which checks out
 tracked files only, never sees.
 
-Three of the files a member receives sit at its root rather than under `conventions/`, because
-something other than this family reads them there. `.markdownlint-cli2.jsonc` is the rule set
-under the name markdownlint-cli2 and every editor plugin built on it discovers on its own, and
-`.vscode/settings.json` and `.vscode/extensions.json` ask VS Code to format Markdown on save with
-that same library. They are vendored and hashed like everything else, so an editor and the shared
-job hold one form between them rather than one each, and a member that edits them locally is
-named by `check`.
+One file a member receives sits at its root rather than under `conventions/`, because something
+other than this family reads it there: `.markdownlint-cli2.jsonc` is the rule set under the name
+markdownlint-cli2 and every editor plugin built on it discovers on its own. It is vendored and
+hashed like everything else, so an editor and the shared job read the same rules and a member that
+edits them locally is named by `check`.
+
+Two more, `.vscode/settings.json` and `.vscode/extensions.json`, ask VS Code to format Markdown on
+save with that same library, and those two are the member's own. VS Code reads one settings file
+and one recommendation file per repository and merges nothing, so a member with its own language —
+the engine's Java settings, a site's npm ones — has no second place to put them, and a copy held
+byte for byte would take that place away. So `sync` writes each only where a member has none, from
+the copy under `conventions/`, and never over one that is there. What the family owns is the
+Markdown settings key and the one recommended extension; `conventions-format` compares those
+against the vendored copies, on parsed values rather than text, and says nothing about any other
+key or any other extension.
 
 The form has its own list of what it leaves alone, `format-exclude`, because the two checks skip
 a folder for different reasons. The prose check skips a spec that quotes the words it scans for,

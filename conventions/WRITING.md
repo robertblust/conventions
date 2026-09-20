@@ -116,7 +116,9 @@ repository to them and `fix` writes them. The rules sit at the root because that
 editor looks for them without being told, and a form a writer meets only after pushing is a form
 they write against all day: `.vscode/` asks VS Code to format Markdown on save with the same
 library the shared job runs, and an editor plugin that writes Markdown elsewhere bundles the
-same rules rather than a form of its own.
+same rules rather than a form of its own. Those two `.vscode/` files belong to the repository,
+which has its own language to configure and one file to do it in; what the family owns of them
+is the Markdown setting and the one recommended extension, and nothing else in them is read.
 
 Release notes are this register aimed at a consumer: what changed for them, what breaks and
 how to take it, in that order.
