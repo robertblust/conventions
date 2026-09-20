@@ -116,9 +116,10 @@ repository to them and `fix` writes them. The rules sit at the root because that
 editor looks for them without being told, and a form a writer meets only after pushing is a form
 they write against all day: `.vscode/` asks VS Code to format Markdown on save with the same
 library the shared job runs, and an editor plugin that writes Markdown elsewhere bundles the
-same rules rather than a form of its own. Those two `.vscode/` files belong to the repository,
-which has its own language to configure and one file to do it in; what the family owns of them
-is the Markdown setting and the one recommended extension, and nothing else in them is read.
+same rules rather than a form of its own. What is in `.vscode/` is not in git — every repository
+ignores it, because a repository has one settings file for every tool and language it uses and
+that file is nobody else's to own. `conventions-sync` writes it where there is none, so a fresh
+clone formats on save without anyone setting it up, and no check holds a repository to it.
 
 Release notes are this register aimed at a consumer: what changed for them, what breaks and
 how to take it, in that order.
