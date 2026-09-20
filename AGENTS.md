@@ -1,4 +1,4 @@
-<!-- conventions · v1.21.0 -->
+<!-- conventions · v1.22.0 -->
 Shared conventions of the robertblust, guestgraph and companygraph organizations live in
 `conventions/`, vendored from robertblust/conventions at the release `conventions.json`
 names. Read them before writing or committing anything here.
@@ -29,10 +29,9 @@ Three kinds of file break that mirror. This `AGENTS.md` sits at the root here an
 a network. `.markdownlint-cli2.jsonc` goes the other way: it sits at the root here and at a
 member's root too, because markdownlint-cli2 finds it there and nowhere else, and this repository
 carries it for itself as every member does. `conventions/vscode-settings.json` and
-`conventions/vscode-extensions.json` are the AGENTS.md arrangement again, for a file this
-repository cannot own outright: they are vendored so that the check works without a network, and
-`.vscode/settings.json` and `.vscode/extensions.json` here are this repository's own copies,
-seeded from them like any member's.
+`conventions/vscode-extensions.json` are neither: they are what `sync` writes into a member's
+`.vscode/` where it finds none, and `.vscode/` is ignored here as it is everywhere, so this
+repository's own copies are untracked like any member's and no check reads them.
 
 Releasing is a tag and a GitHub Release with notes. Before tagging, set the version in the
 first line of this file to the new tag: the script rewrites it to the pin on sync, so a stale
