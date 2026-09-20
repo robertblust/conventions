@@ -28,11 +28,13 @@
 ### Task 1: License, layout and the spec's one stray name
 
 **Files:**
+
 - Create: `LICENSE`
 - Create: `conventions/.keep` (removed again in Task 2; it only makes the folder exist)
 - Modify: `docs/superpowers/specs/2026-09-04-conventions-design.md`
 
 **Interfaces:**
+
 - Produces: the `conventions/` folder every later task writes into; the Apache 2.0 license every file is under.
 
 - [ ] **Step 1: Copy the license the family already uses**
@@ -41,6 +43,7 @@
 cp /Users/rob/git/robertblust/design/LICENSE LICENSE
 head -3 LICENSE
 ```
+
 Expected: the first lines read `Apache License`, `Version 2.0, January 2004`.
 
 - [ ] **Step 2: Remove the one product name from the spec**
@@ -57,6 +60,7 @@ Confirm nothing else names it:
 ```bash
 grep -rn -i "<the product name>" . --exclude-dir=.git; echo "exit $?"
 ```
+
 Expected: no lines, `exit 1`.
 
 - [ ] **Step 3: Make the vendored layout exist**
@@ -86,10 +90,12 @@ EOF
 ### Task 2: `WRITING.md`
 
 **Files:**
+
 - Create: `conventions/WRITING.md`
 - Delete: `conventions/.keep`
 
 **Interfaces:**
+
 - Produces: the file `conventions/WRITING.md`, vendored byte for byte by Task 6's script. Its headings are referenced from `AGENTS.md` (Task 5) and `README.md` (Task 8) by name: *What every register shares*, *The prose register*, *The git register*, *The reply register*, *English*, *German*.
 
 - [ ] **Step 1: Write the file**
@@ -237,6 +243,7 @@ Read it once for: no British form (the words to look for are the ones `test/spel
 ```bash
 grep -n "ß" conventions/WRITING.md; grep -n -E ", and [a-z]+\.$" conventions/WRITING.md; echo "exit codes above should be 1"
 ```
+
 Expected: no matching lines from either grep.
 
 - [ ] **Step 3: Commit**
@@ -263,9 +270,11 @@ EOF
 ### Task 3: `WORKING.md`
 
 **Files:**
+
 - Create: `conventions/WORKING.md`
 
 **Interfaces:**
+
 - Produces: `conventions/WORKING.md`, vendored by Task 6. Section names referenced from `AGENTS.md`: *Branches and commits*, *Pull requests*, *Identity*, *Releases and pins*, *Checks*, *Reviews*.
 
 - [ ] **Step 1: Write the file**
@@ -385,9 +394,11 @@ EOF
 ### Task 4: `REPOSITORIES.md`
 
 **Files:**
+
 - Create: `conventions/REPOSITORIES.md`
 
 **Interfaces:**
+
 - Produces: `conventions/REPOSITORIES.md`, vendored by Task 6. Its member list is the order Task 8's README tells a releaser to re-sync in.
 
 - [ ] **Step 1: Write the file**
@@ -441,6 +452,7 @@ sites' model pages are built from them. Nothing here opens those pull requests f
 ```bash
 for r in robertblust/design robertblust/robertblust.github.io robertblust/mental-model robertblust/field-notes guestgraph/guestgraph.github.io guestgraph/engine guestgraph/.github companygraph/companygraph.github.io companygraph/meta-model companygraph/.github; do [ -d ~/git/$r/.git ] && echo "ok $r" || echo "MISSING $r"; done
 ```
+
 Expected: ten `ok` lines.
 
 - [ ] **Step 3: Commit**
@@ -463,10 +475,12 @@ EOF
 ### Task 5: `AGENTS.md` and `CLAUDE.md`
 
 **Files:**
+
 - Create: `AGENTS.md`
 - Create: `CLAUDE.md`
 
 **Interfaces:**
+
 - Produces: the fenced block between `<!-- conventions · v1.0.0 -->` and `<!-- end conventions -->` that Task 6's `block_of` extracts from root `AGENTS.md` and writes into every member. The markers are exact strings; the middle dot is U+00B7.
 
 - [ ] **Step 1: Write `AGENTS.md`**
@@ -519,6 +533,7 @@ printf '@AGENTS.md\n@conventions/WRITING.md\n@conventions/WORKING.md\n@conventio
 grep -n -E "^<!-- conventions · v1\.0\.0 -->$|^<!-- end conventions -->$" AGENTS.md
 for f in conventions/WRITING.md conventions/WORKING.md conventions/REPOSITORIES.md; do [ -f $f ] && echo "ok $f"; done
 ```
+
 Expected: the two marker lines with their numbers, then three `ok`.
 
 - [ ] **Step 4: Commit**
@@ -543,10 +558,12 @@ EOF
 ### Task 6: The sync script, test-first
 
 **Files:**
+
 - Create: `test/run.sh`
 - Create: `conventions/conventions-sync`
 
 **Interfaces:**
+
 - Consumes: root `AGENTS.md` with the markers from Task 5; `conventions/WRITING.md`, `WORKING.md`, `REPOSITORIES.md` from Tasks 2–4.
 - Produces: `sh conventions/conventions-sync sync|check`, run from a member's root. Reads `conventions.json` `{"repo": "...", "tag": "..."}`. Honors `CONVENTIONS_SOURCE` as either an `http(s)://` base or a local directory, overriding `https://raw.githubusercontent.com/<repo>/<tag>`. Writes `conventions/{WRITING.md,WORKING.md,REPOSITORIES.md,AGENTS.md,conventions-sync,manifest.json}` and the block in `AGENTS.md`. `check` exits 0 when everything matches, 1 otherwise, and prints one `✗` line per difference.
 
@@ -635,6 +652,7 @@ if [ "$fails" -eq 0 ]; then echo "all pass"; else echo "$fails failing"; exit 1;
 ```bash
 sh test/run.sh; echo "exit $?"
 ```
+
 Expected: `sh: .../conventions/conventions-sync: No such file or directory` and a non-zero exit. Nothing else exists yet.
 
 - [ ] **Step 3: Write the script**
@@ -778,6 +796,7 @@ chmod +x conventions/conventions-sync
 ```bash
 sh test/run.sh; echo "exit $?"
 ```
+
 Expected: every line begins with `✓`, then `all pass`, `exit 0`. If a line begins with `✗`, the message names what differs; fix the script, not the test.
 
 - [ ] **Step 5: Run the script against this checkout as if it were a member**
@@ -793,6 +812,7 @@ rm conventions.json conventions/AGENTS.md conventions/manifest.json
 git checkout -- AGENTS.md 2>/dev/null || true
 git status --short
 ```
+
 Expected: `✓ conventions: conventions/ and the AGENTS.md block match robertblust/conventions@v1.0.0`, `exit 0`; the second `git status` shows nothing but the new script and test.
 
 - [ ] **Step 6: shellcheck**
@@ -800,6 +820,7 @@ Expected: `✓ conventions: conventions/ and the AGENTS.md block match robertblu
 ```bash
 command -v shellcheck > /dev/null && shellcheck conventions/conventions-sync test/run.sh || echo "no shellcheck here; CI runs it"
 ```
+
 Expected: no findings, or the note. If `brew install shellcheck` is quick, do it and fix what it says.
 
 - [ ] **Step 7: Commit**
@@ -828,9 +849,11 @@ EOF
 ### Task 7: The spelling tripwire
 
 **Files:**
+
 - Create: `test/spelling.sh`
 
 **Interfaces:**
+
 - Produces: `sh test/spelling.sh`, exit 0 when no Markdown file in the repository contains a British form from its list, exit 1 listing `file:line: word` otherwise.
 
 - [ ] **Step 1: Write a failing probe first**
@@ -870,6 +893,7 @@ sh test/spelling.sh; echo "exit $?"
 rm probe.md
 sh test/spelling.sh; echo "exit $?"
 ```
+
 Expected: first run prints `✗ British spellings:` with `./probe.md:3` and `exit 1`; second run prints the `✓` line and `exit 0`. If the second run lists a real file, fix the file.
 
 - [ ] **Step 4: Commit**
@@ -892,10 +916,12 @@ EOF
 ### Task 8: `README.md` and CI
 
 **Files:**
+
 - Create: `README.md`
 - Create: `.github/workflows/ci.yml`
 
 **Interfaces:**
+
 - Consumes: the script's install path `conventions/conventions-sync` and the pin shape from Task 6; the test entry points from Tasks 6 and 7.
 - Produces: the job id `test`, which the branch ruleset will require once the repository is on GitHub.
 
@@ -990,6 +1016,7 @@ jobs:
 git status --short
 sh test/run.sh && sh test/spelling.sh; echo "exit $?"
 ```
+
 Expected: `git status` shows only the two new files; both suites pass; `exit 0`.
 
 - [ ] **Step 4: Commit**
@@ -1012,6 +1039,7 @@ EOF
 ### Task 9: Read-through, then stop
 
 **Files:**
+
 - None created. This task ends with the owner reading.
 
 - [ ] **Step 1: Assemble a reading order for the owner**

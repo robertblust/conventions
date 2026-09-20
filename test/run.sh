@@ -215,6 +215,24 @@ printf '# clean\n' > "$P/docs/kept/a.md"
 if [ -x "$HERE/conventions/conventions-check" ]; then ok "conventions-check is executable"; else bad "conventions-check is not executable"; fi
 if grep -q 'conventions-check' "$HERE/conventions/conventions-sync"; then ok "the sync script vendors conventions-check"; else bad "the sync script does not vendor conventions-check"; fi
 
+# a folder git ignores is not prose the job can see, so the prose check does not read it either
+GI=$TMP/prose-ignored
+mkdir -p "$GI/scratch"
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$GI/conventions.json"
+printf '# kept\n\nA spaced — dash.\n' > "$GI/README.md"
+printf 'The colour of it.\n' > "$GI/scratch/s.md"
+gicheck() { CONVENTIONS_ROOT="$GI" sh "$HERE/conventions/conventions-check"; }
+out=$(gicheck 2>&1 || true)
+if echo "$out" | grep -q 'scratch/s.md:1: colour'
+then ok "outside a repository the prose walk is unchanged"
+else bad "the prose walk skipped a folder where there is no repository: $out"
+fi
+(cd "$GI" && git init -q && printf 'scratch/\n' > .gitignore) > /dev/null 2>&1
+if gicheck > /dev/null 2>&1
+then ok "the prose check does not read a folder git ignores"
+else bad "the prose check read a folder git ignores: $(gicheck 2>&1)"
+fi
+
 # --- conventions-check: the README title -----------------------------------------------------
 # A fixture, not a clone: CONVENTIONS_REPO is what a tree with no remote and no runner uses to
 # say which row is its own. The table here is two rows of the real shape, one ordinary member
@@ -331,6 +349,31 @@ EOF
   then ok "fix writes the compact table, delimiter row and alignment colons included"
   else bad "fix did not write the compact table: $(cat "$F/docs/b [draft].md")"
   fi
+
+  # A heading, a list and a fence crowded against their neighbors, which fix opens up. Written
+  # as one file because the three rules meet in ordinary prose exactly like this.
+  # shellcheck disable=SC2016 # literal markdown backticks, not command substitution
+  printf '# D\n## Crowded\nLead-in:\n- one\n- two\n\nAfter.\n```sh\necho hi\n```\n' > "$F/docs/d.md"
+  out=$(fcheck 2>&1 || true)
+  if echo "$out" | grep -q 'docs/d.md:2: MD022' && echo "$out" | grep -q 'docs/d.md:4: MD032' && echo "$out" | grep -q 'docs/d.md:8: MD031'
+  then ok "a crowded heading, list and fence are each named by line and rule"
+  else bad "the structural rules did not fire: $out"
+  fi
+  # shellcheck disable=SC2016 # literal markdown backticks, not command substitution
+  if fcheck fix > /dev/null 2>&1 && [ "$(cat "$F/docs/d.md")" = "$(printf '# D\n\n## Crowded\n\nLead-in:\n\n- one\n- two\n\nAfter.\n\n```sh\necho hi\n```')" ]
+  then ok "fix opens up a crowded heading, list and fence in one run"
+  else bad "fix did not open them up: $(cat "$F/docs/d.md")"
+  fi
+  rm "$F/docs/d.md"
+
+  # Every rule of the form can be written by the tool. A rule that only reported would leave
+  # fix green with hits still standing, which is what this asserts against.
+  printf '# E\n\nA line.\n' > "$F/docs/e.md"
+  if fcheck fix > /dev/null 2>&1 && fcheck > /dev/null 2>&1
+  then ok "fix leaves a tree the check passes, so no rule of the form only reports"
+  else bad "fix left hits standing: $(fcheck 2>&1)"
+  fi
+  rm "$F/docs/e.md"
 
   printf '# C\n\n* a list in stars and _emphasis_ in underscores\n' > "$F/docs/c.md"
   if fcheck fix > /dev/null 2>&1 && [ "$(cat "$F/docs/c.md")" = "$(printf '# C\n\n- a list in stars and *emphasis* in underscores')" ]

@@ -24,12 +24,14 @@
 ### Task 1: `conventions-check`, test-first
 
 **Files:**
+
 - Modify: `test/run.sh` (append cases before the final line)
 - Create: `conventions/conventions-check`
 - Modify: `conventions/conventions-sync` (the `FILES` line)
 - Modify: `docs/superpowers/specs/2026-09-04-enforcement-design.md` (section 3, one paragraph)
 
 **Interfaces:**
+
 - Produces: `sh conventions/conventions-check`, run from a member's root. Reads `exclude` from `conventions.json` as a JSON array of path prefixes relative to the root; an absent key is an empty list. Scans every `*.md` outside `.git/` and the excluded prefixes. Prints `✗ file:line: word` per hit, `✓ every Markdown file follows WRITING.md` and exit 0 when clean, exit 1 otherwise. Honors `CONVENTIONS_ROOT` as the directory to scan, default `.`.
 - Produces: `conventions-check` in the sync script's `FILES`, so members receive it.
 
@@ -75,6 +77,7 @@ if grep -q 'conventions-check' "$HERE/conventions/conventions-sync"; then ok "th
 ```bash
 sh test/run.sh; echo "exit $?"
 ```
+
 Expected: the earlier cases pass, then `sh: …/conventions-check: No such file or directory` lines and `✗` lines for the new cases, non-zero exit.
 
 - [ ] **Step 3: Write the script**
@@ -167,6 +170,7 @@ and after `chmod +x "$DIR/conventions-sync"` add:
 sh test/run.sh; echo "exit $?"
 /private/tmp/claude-501/-Users-rob-git-robertblust/6279a5a8-b92b-41ed-a06b-e2764800f1e2/scratchpad/sc/bin/shellcheck conventions/conventions-sync conventions/conventions-check test/run.sh; echo "shellcheck exit $?"
 ```
+
 Expected: every line `✓`, `all pass`, exit 0; shellcheck exit 0. A `${loc#"$ROOT"/}` form is what keeps SC2295 quiet; if the runner's version still objects, quote as shellcheck suggests rather than disabling.
 
 - [ ] **Step 5: Run it on this checkout**
@@ -175,6 +179,7 @@ Expected: every line `✓`, `all pass`, exit 0; shellcheck exit 0. A `${loc#"$RO
 printf '{ "exclude": ["docs/superpowers"] }\n' > conventions.json
 sh conventions/conventions-check; echo "exit $?"
 ```
+
 Expected: `✓ every Markdown file follows WRITING.md`, exit 0. If it names a file, fix the file; this is the script finding what the two private tripwires found, plus inline code now ignored. Keep `conventions.json`; it is committed in Task 3.
 
 - [ ] **Step 6: Correct the spec's one paragraph**
@@ -222,11 +227,13 @@ EOF
 ### Task 2: The reusable workflow, and this repository's CI
 
 **Files:**
+
 - Create: `.github/workflows/check.yml`
 - Modify: `.github/workflows/ci.yml`
 - Delete: `test/spelling.sh`, `test/dashes.sh`
 
 **Interfaces:**
+
 - Produces: `robertblust/conventions/.github/workflows/check.yml` callable with `uses:` at a tag; job id `conventions`. Fails when the caller's `conventions.json` tag differs from the tag the workflow was called at.
 
 - [ ] **Step 1: Write the reusable workflow**
@@ -296,6 +303,7 @@ git rm -q test/spelling.sh test/dashes.sh
 python3 -c "import yaml,sys; [yaml.safe_load(open(f)) for f in ['.github/workflows/check.yml','.github/workflows/ci.yml']]; print('yaml ok')" 2>/dev/null || ruby -ryaml -e "YAML.load_file('.github/workflows/check.yml'); YAML.load_file('.github/workflows/ci.yml'); puts 'yaml ok'"
 sh test/run.sh > /dev/null; echo "run exit $?"
 ```
+
 Expected: `yaml ok`; `all pass`. The reusable workflow itself cannot run here; mental-model's pull request in Task 5 is its first run.
 
 - [ ] **Step 4: Commit**
@@ -326,6 +334,7 @@ EOF
 ### Task 3: The block, `WORKING.md`, `README.md`, and the release marker
 
 **Files:**
+
 - Modify: `AGENTS.md` (block sentence and version marker)
 - Modify: `conventions/WORKING.md` (two sentences)
 - Modify: `README.md` (three places)
@@ -455,6 +464,7 @@ EOF
 )"
 gh pr checks --watch
 ```
+
 Expected: `test` pass.
 
 - [ ] **Step 2: Stop for the owner's word, then merge with a merge commit and tag**
@@ -474,8 +484,10 @@ printf '{ "repo": "robertblust/conventions", "tag": "v1.3.0" }\n' > conventions.
 curl -fsSL https://raw.githubusercontent.com/robertblust/conventions/v1.3.0/conventions/conventions-sync -o /tmp/conventions-sync
 sh /tmp/conventions-sync sync
 ```
+
 EOF
 )"
+
 ```
 
 ---
@@ -497,6 +509,7 @@ sh conventions/conventions-sync sync  # twice: the v1.2.0 script does not know a
 sh conventions/conventions-sync check; echo "check exit $?"
 head -1 AGENTS.md
 ```
+
 Expected: the first `sync` uses the v1.2.0 script and misses `conventions-check`; the second
 uses the v1.3.0 script it just fetched and vendors it. `check` then reads `✓ … match
 robertblust/conventions@v1.3.0`, exit 0, marker `v1.3.0`.
@@ -506,6 +519,7 @@ robertblust/conventions@v1.3.0`, exit 0, marker `v1.3.0`.
 ```bash
 sh conventions/conventions-check; echo "exit $?"
 ```
+
 Expected hits, and their fixes: `README.md:36: artefact` → `artifact`; `docs/specs/2026-09-02-experience-kind.md:176: modelling` and `:222: modelling` → `modeling`. Anything else it names is fixed the same way unless it sits inside the vendored core, which is excluded. Rerun until `✓`, exit 0.
 
 - [ ] **Step 3: The workflow**
@@ -563,6 +577,7 @@ EOF
 )"
 gh pr checks --watch
 ```
+
 Expected: a check named `conventions` passes. If it fails on the tag step, the pin and the `uses:` tag disagree; if it fails on checkout or the scripts, read the log before touching anything.
 
 - [ ] **Step 6: The ruleset**
@@ -596,6 +611,7 @@ gh api -X POST repos/robertblust/mental-model/rulesets --input - <<'EOF'
 }
 EOF
 ```
+
 Expected: JSON back with `"enforcement": "active"`.
 
 - [ ] **Step 7: Stop for the owner's word, then merge and delete the merged branches**
@@ -607,6 +623,7 @@ gh run list --branch main --limit 1
 for b in conventions core-0-13-1 mastership-and-skills-cleanup ubs-division-scope cv-model-linkedin-sync date-precision experience-kind prose-urls references register-links conventions-1-3-0; do git push origin --delete "$b"; done
 git fetch --prune && git branch -r
 ```
+
 Expected: the `conventions` run on `main` succeeds; the remote branch list is `origin/main` and `origin/review-drafted-prose`, the one unmerged branch, which stays until its owner decides.
 
 ---

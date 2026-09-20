@@ -25,11 +25,13 @@
 ### Task 1: `WRITING.md` says how a text is made
 
 **Files:**
+
 - Modify: `conventions/WRITING.md:14-20` (the German paragraph of *Languages*)
 - Modify: `conventions/WRITING.md:21` (insert the new section *How a text is made* before `## What every register shares`)
 - Modify: `conventions/WRITING.md:61-62` (insert the page paragraph after the release-notes paragraph)
 
 **Interfaces:**
+
 - Produces: the section title `## How a text is made`, which `WRITER.md` and `TRANSLATOR.md` refer to by name in Task 3.
 
 - [ ] **Step 1: Replace the German paragraph of *Languages***
@@ -126,6 +128,7 @@ EOF
 ### Task 2: `WORKING.md` says a role never commits
 
 **Files:**
+
 - Modify: `conventions/WORKING.md:15-19` (the paragraph beginning `An agent commits when the owner asks`)
 
 - [ ] **Step 1: Add two sentences to the paragraph**
@@ -177,10 +180,12 @@ EOF
 ### Task 3: The two briefs
 
 **Files:**
+
 - Create: `conventions/WRITER.md`
 - Create: `conventions/TRANSLATOR.md`
 
 **Interfaces:**
+
 - Consumes: `## How a text is made` in `WRITING.md` (Task 1); `GLOSSARY.md` (Task 4) by name.
 - Produces: the two files the adapters in Task 6 and Task 9 point at by path.
 
@@ -303,9 +308,11 @@ EOF
 ### Task 4: The glossary, harvested from the sites
 
 **Files:**
+
 - Create: `conventions/GLOSSARY.md`
 
 **Interfaces:**
+
 - Consumes: the three sites' `data-de` attributes and `verify/check.mjs`, read once for the harvest. This is the one reach outside the repository the spec names, for the one purpose of reading forms already in use.
 - Produces: the table the translator reads.
 
@@ -385,10 +392,12 @@ EOF
 ### Task 5: The sync script vendors the three files, test-first
 
 **Files:**
+
 - Modify: `test/run.sh:21` (the list of files a sync writes)
 - Modify: `conventions/conventions-sync:21` (the `FILES` line)
 
 **Interfaces:**
+
 - Produces: `FILES="WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md AGENTS.md conventions-sync conventions-check"`, the list every later release inherits.
 
 - [ ] **Step 1: Add the three names to the test's list**
@@ -457,11 +466,13 @@ EOF
 ### Task 6: The block, the README, the version, the workflow's release
 
 **Files:**
+
 - Modify: `AGENTS.md:1-8` (the marker and the list in the block)
 - Modify: `.github/workflows/check.yml` (the `CONVENTIONS_RELEASE` line)
 - Modify: `README.md:3-8` (the file list), `README.md:16-24` (the recipe), and the `exclude` example and workflow example that name `v1.4.0`
 
 **Interfaces:**
+
 - Consumes: the files of Tasks 3 and 4 by name.
 - Produces: the block members receive at v1.5.0; the adapter texts members copy in Task 9.
 
@@ -637,12 +648,14 @@ git branch -d content-roles
 ### Task 9: The re-sync wave, one pull request per member
 
 **Files, per member:**
+
 - Modify: `conventions.json` (the tag)
 - Modify: `.github/workflows/conventions.yml` (the `uses:` tag)
 - Modify: `conventions/` and the block in `AGENTS.md` (written by `sync`)
 - Create: `.claude/agents/writer.md`, `.claude/agents/translator.md`
 
 **Interfaces:**
+
 - Consumes: the tag `v1.5.0` from Task 8.
 
 Order, from `REPOSITORIES.md`: `robertblust/design`, `robertblust/robertblust.github.io`, `guestgraph/guestgraph.github.io`, `companygraph/companygraph.github.io`, `robertblust/mental-model`, `companygraph/meta-model`, `guestgraph/engine`, `robertblust/field-notes`, `guestgraph/.github`, `companygraph/.github`. Each is one pull request, opened and reported, merged only on the owner's word; the owner has said that a mechanical re-sync wave may be merged together with a pause wherever words change, and the adapters are new files, not changed words, so ask once for the wave and stop for any member whose `conventions-check` turns up a word to fix.
