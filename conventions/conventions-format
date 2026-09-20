@@ -1,24 +1,27 @@
 #!/bin/sh
 # conventions-format — hold a member's Markdown to the one form WRITING.md gives it, whatever
-# editor wrote it last. The form is the rule set in conventions/markdown.markdownlint-cli2.jsonc,
+# editor wrote it last. The form is the rule set in .markdownlint-cli2.jsonc at the member's root,
 # with the one rule markdownlint does not ship in conventions/markdown-rules.cjs, and the tool is
 # markdownlint-cli2 at the version below, the same library an editor plugin can bundle, so a file
-# a tool reformatted and a file a person wrote come out byte for byte the same.
+# a tool reformatted and a file a person wrote come out byte for byte the same. The rules sit at
+# the root under that name because it is the name an editor plugin discovers without being told,
+# which is how the same form reaches a writer before they push and not only afterwards.
 #
 #   sh conventions/conventions-format          check: exit 1 with one line per hit, file:line
 #   sh conventions/conventions-format fix      rewrite every hit into the form, in place
 #
 # Needs sh, find, sort and sed, and Node 22 or later for npx; the tool is fetched by npx on
-# first use and cached after. The files are every Markdown file but .git, node_modules at any
-# depth and the folders under "format-exclude" in conventions.json, or under "exclude" where a
-# member names no "format-exclude", so that a member that has not decided reads as it did.
+# first use and cached after. git is used where it is there, to leave out what it ignores. The
+# files are every Markdown file but .git, node_modules at any depth, what .gitignore names, and
+# the folders under "format-exclude" in conventions.json, or under "exclude" where a member names
+# no "format-exclude", so that a member that has not decided reads as it did.
 # CONVENTIONS_ROOT overrides the directory, which is how the tests point it at a fixture.
 set -eu
 
 VERSION=0.23.2
 ROOT=${CONVENTIONS_ROOT:-.}
 PIN=$ROOT/conventions.json
-RULES=conventions/markdown.markdownlint-cli2.jsonc
+RULES=.markdownlint-cli2.jsonc
 
 cmd=${1:-check}
 case $cmd in check|fix) ;; *) echo "usage: sh conventions/conventions-format [check|fix]" >&2; exit 2 ;; esac
@@ -53,6 +56,16 @@ IFS=$oldifs
 set -- "$@" -name '*.md' -type f -print
 
 files=$(find "$@" 2> /dev/null | LC_ALL=C sort || true)
+
+# What git ignores is not the repository's Markdown. The shared job checks out tracked files
+# only, so a folder in .gitignore is absent there and present here, and without this a local run
+# fails on scratch the job never sees while the job stays green. Where git is missing or this is
+# no repository the walk is unchanged, so a plain directory still formats.
+if command -v git > /dev/null 2>&1 && git rev-parse --git-dir > /dev/null 2>&1; then
+  ignored=$(printf '%s\n' "$files" | git check-ignore --stdin 2> /dev/null) || ignored=""
+  [ -z "$ignored" ] || files=$(printf '%s\n' "$files" | grep -vxF "$ignored" || true)
+fi
+
 if [ -z "$files" ]; then
   echo "✗ conventions: no Markdown file was formatted under $ROOT" >&2
   exit 1

@@ -92,11 +92,21 @@ be a hit:
 ```
 
 The same job holds every member's Markdown to the one form `WRITING.md` gives it, with the
-rules in `conventions/markdown.markdownlint-cli2.jsonc` and `conventions/markdown-rules.cjs`, so
+rules in `.markdownlint-cli2.jsonc` and `conventions/markdown-rules.cjs`, so
 a table an editor reformatted fails until it is back in the family's form.
 `sh conventions/conventions-format` names each file and line that differs and
 `sh conventions/conventions-format fix` rewrites them. It needs Node 22 or later, since the rules
-are markdownlint's and npx fetches the version the script pins.
+are markdownlint's and npx fetches the version the script pins. What git ignores is left out, so
+a scratch folder a member keeps untracked does not fail a run here that the job, which checks out
+tracked files only, never sees.
+
+Three of the files a member receives sit at its root rather than under `conventions/`, because
+something other than this family reads them there. `.markdownlint-cli2.jsonc` is the rule set
+under the name markdownlint-cli2 and every editor plugin built on it discovers on its own, and
+`.vscode/settings.json` and `.vscode/extensions.json` ask VS Code to format Markdown on save with
+that same library. They are vendored and hashed like everything else, so an editor and the shared
+job hold one form between them rather than one each, and a member that edits them locally is
+named by `check`.
 
 The form has its own list of what it leaves alone, `format-exclude`, because the two checks skip
 a folder for different reasons. The prose check skips a spec that quotes the words it scans for,

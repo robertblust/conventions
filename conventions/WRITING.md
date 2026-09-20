@@ -105,9 +105,12 @@ turns an edit to one cell into an edit to its whole column. So a table is compac
 inside each pipe, `| --- |` under the header whatever the column's width, its alignment colons
 kept, and no padding. Emphasis is `*`, strong is `**`, a list item is `-`, and a file ends in
 one newline with no run of blank lines and no trailing space beyond a line break.
-`conventions/markdown.markdownlint-cli2.jsonc` is this paragraph as rules, with the one rule
+`.markdownlint-cli2.jsonc` at a repository's root is this paragraph as rules, with the one rule
 markdownlint does not ship in `conventions/markdown-rules.cjs`; `conventions-format` holds a
-repository to them and `fix` writes them, and an editor plugin that writes Markdown bundles the
+repository to them and `fix` writes them. The rules sit at the root because that is where an
+editor looks for them without being told, and a form a writer meets only after pushing is a form
+they write against all day: `.vscode/` asks VS Code to format Markdown on save with the same
+library the shared job runs, and an editor plugin that writes Markdown elsewhere bundles the
 same rules rather than a form of its own.
 
 Release notes are this register aimed at a consumer: what changed for them, what breaks and

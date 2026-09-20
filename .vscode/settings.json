@@ -1,0 +1,13 @@
+{
+  // Markdown is formatted on save by the library conventions-format runs in CI, reading the
+  // .markdownlint-cli2.jsonc the script reads, so the editor and the shared job hold one form
+  // between them rather than one each. The setting is scoped to Markdown because what formats
+  // another language is the repository's own business.
+  //
+  // files.trimTrailingWhitespace is deliberately not set. Two spaces at the end of a line are a
+  // line break MD009 allows, and trimming them would rewrite prose the form accepts.
+  "[markdown]": {
+    "editor.defaultFormatter": "DavidAnson.vscode-markdownlint",
+    "editor.formatOnSave": true
+  }
+}

@@ -24,9 +24,12 @@ same in both. The block is plain words and names no agent vendor; `CLAUDE.md` is
 adapter, four lines that import the entry file and `WRITING.md`, `WORKING.md` and
 `REPOSITORIES.md` in that vendor's syntax, and a member carries the same four lines; the two
 briefs and the glossary are read by the agent adapters the README names, not by every session.
-The one file members receive that does not sit under `conventions/` in the source is this
-`AGENTS.md`, which the script fetches from the root and vendors as `conventions/AGENTS.md` so
-that `check` can compare a member's block against the release without a network.
+Two kinds of file break that mirror. This `AGENTS.md` sits at the root here and is vendored as
+`conventions/AGENTS.md`, so that `check` can compare a member's block against the release without
+a network. `.markdownlint-cli2.jsonc`, `.vscode/settings.json` and `.vscode/extensions.json` go
+the other way: they sit at the root here and at a member's root too, because markdownlint-cli2
+and VS Code find them there and nowhere else. This repository carries them for itself as every
+member does, which is also how the tests read them.
 
 Releasing is a tag and a GitHub Release with notes. Before tagging, set the version in the
 first line of this file to the new tag: the script rewrites it to the pin on sync, so a stale

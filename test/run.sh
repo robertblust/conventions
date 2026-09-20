@@ -18,9 +18,16 @@ printf '# member — working conventions\n\nIts own text.\n' > "$MEMBER/AGENTS.m
 
 # sync vendors the files and writes the block
 run sync > /dev/null
-for f in WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md AGENTS.md conventions-sync conventions-check conventions-format markdown.markdownlint-cli2.jsonc markdown-rules.cjs manifest.json; do
+for f in WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md AGENTS.md conventions-sync conventions-check conventions-format markdown-rules.cjs manifest.json; do
   [ -f "$MEMBER/conventions/$f" ] || bad "sync did not write conventions/$f"
 done
+# The three files a member gets at its own root, because markdownlint-cli2 and VS Code read
+# them there and nowhere else.
+for f in .markdownlint-cli2.jsonc .vscode/settings.json .vscode/extensions.json; do
+  if [ -f "$MEMBER/$f" ]; then ok "sync writes $f at the member's root"; else bad "sync did not write $f at the member's root"; fi
+done
+if cmp -s "$MEMBER/.markdownlint-cli2.jsonc" "$HERE/.markdownlint-cli2.jsonc"
+then ok "the root rule set is byte-identical to the source"; else bad "the root rule set differs from the source"; fi
 if [ -x "$MEMBER/conventions/conventions-check" ]; then ok "conventions-check is vendored executable"; else bad "conventions-check is not vendored executable"; fi
 if [ -x "$MEMBER/conventions/conventions-format" ]; then ok "conventions-format is vendored executable"; else bad "conventions-format is not vendored executable"; fi
 if grep -q '^<!-- conventions · v1.0.0 -->$' "$MEMBER/AGENTS.md" && grep -q '^<!-- end conventions -->$' "$MEMBER/AGENTS.md"
@@ -31,6 +38,10 @@ if cmp -s "$MEMBER/conventions/WRITING.md" "$HERE/conventions/WRITING.md"; then 
 if [ -x "$MEMBER/conventions/conventions-sync" ]; then ok "the vendored script is executable"; else bad "the vendored script is not executable"; fi
 if grep -q '"tag": "v1.0.0"' "$MEMBER/conventions/manifest.json" && grep -q '"conventions/WORKING.md": "sha256:' "$MEMBER/conventions/manifest.json"
 then ok "the manifest records the tag and a hash per file"; else bad "the manifest is incomplete"; fi
+if grep -q '"\.markdownlint-cli2\.jsonc": "sha256:' "$MEMBER/conventions/manifest.json" && grep -q '"\.vscode/settings\.json": "sha256:' "$MEMBER/conventions/manifest.json"
+then ok "the manifest hashes a root file under its root path"; else bad "the manifest does not hash the root files"; fi
+if python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$MEMBER/conventions/manifest.json" 2> /dev/null
+then ok "the manifest is valid JSON with both lists in it"; else bad "the manifest is not valid JSON"; fi
 
 # check passes on a fresh sync
 if run check > /dev/null; then ok "check passes after sync"; else bad "check fails after sync"; fi
@@ -45,6 +56,26 @@ echo "edited here" >> "$MEMBER/conventions/WORKING.md"
 out=$(run check 2>&1 || true)
 if echo "$out" | grep -q 'conventions/WORKING.md differs'; then ok "check names an edited vendored file"; else bad "check missed an edited file: $out"; fi
 run sync > /dev/null
+
+# an edited root file is named, as an edited vendored one is
+printf '\n' >> "$MEMBER/.vscode/settings.json"
+out=$(run check 2>&1 || true)
+if echo "$out" | grep -q '\.vscode/settings.json differs'; then ok "check names an edited root file"; else bad "check missed an edited root file: $out"; fi
+rm "$MEMBER/.markdownlint-cli2.jsonc"
+out=$(run check 2>&1 || true)
+if echo "$out" | grep -q '\.markdownlint-cli2.jsonc is missing'; then ok "check names a missing root file"; else bad "check missed a missing root file: $out"; fi
+run sync > /dev/null
+if run check > /dev/null; then ok "sync restores the root files"; else bad "sync did not restore the root files: $(run check 2>&1)"; fi
+
+# what an earlier release vendored and this one does not is removed by sync and named until then
+printf 'the old rule set\n' > "$MEMBER/conventions/markdown.markdownlint-cli2.jsonc"
+out=$(run check 2>&1 || true)
+if echo "$out" | grep -q 'conventions/markdown.markdownlint-cli2.jsonc is what an earlier release vendored'
+then ok "check names a file the release no longer carries"; else bad "a retired file was not named: $out"; fi
+run sync > /dev/null
+if [ ! -f "$MEMBER/conventions/markdown.markdownlint-cli2.jsonc" ]
+then ok "sync removes a file the release no longer carries"; else bad "sync left a retired file in place"; fi
+if run check > /dev/null; then ok "check passes once the retired file is gone"; else bad "check still fails after the retired file was removed: $(run check 2>&1)"; fi
 
 # an edited block is caught, and sync repairs it
 sed -i.bak 's/^- .conventions\/WRITING.md.*$/- gone/' "$MEMBER/AGENTS.md" && rm -f "$MEMBER/AGENTS.md.bak"
@@ -253,7 +284,8 @@ mv "$T/conventions/REPOSITORIES.md.away" "$T/conventions/REPOSITORIES.md"
 # network; CI has both. A machine without npx fails here rather than passing unseen.
 F=$TMP/form
 mkdir -p "$F/conventions" "$F/docs" "$F/vendored" "$F/node_modules/pkg" "$F/.claude/agents"
-cp "$HERE/conventions/markdown.markdownlint-cli2.jsonc" "$HERE/conventions/markdown-rules.cjs" "$F/conventions/"
+cp "$HERE/.markdownlint-cli2.jsonc" "$F/"
+cp "$HERE/conventions/markdown-rules.cjs" "$F/conventions/"
 printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0", "exclude": ["vendored"] }\n' > "$F/conventions.json"
 fcheck() { CONVENTIONS_ROOT="$F" sh "$HERE/conventions/conventions-format" "$@"; }
 # The table the way an editor that lines columns up writes it, alignment colons included, and
@@ -334,9 +366,32 @@ EOF
   if echo "$out" | grep -q '.claude/agents/w.md:4'; then ok "a folder whose name starts with a dot is read"; else bad "a dot folder was skipped: $out"; fi
   rm "$F/.claude/agents/w.md"
 
-  rm "$F/conventions/markdown.markdownlint-cli2.jsonc"
+  # What git ignores is scratch the shared job never sees, since it checks out tracked files
+  # only; a local run that failed on it would fail where the job is green. The same fixture
+  # before git init proves the walk is unchanged where there is no repository.
+  G=$TMP/ignored
+  mkdir -p "$G/conventions" "$G/scratch"
+  cp "$HERE/.markdownlint-cli2.jsonc" "$G/"
+  cp "$HERE/conventions/markdown-rules.cjs" "$G/conventions/"
+  printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$G/conventions.json"
+  printf 'scratch/\n' > "$G/.gitignore"
+  printf '# G\n' > "$G/keep.md"
+  cp "$TMP/padded.md" "$G/scratch/s.md"
+  gcheck() { CONVENTIONS_ROOT="$G" sh "$HERE/conventions/conventions-format"; }
+  out=$(gcheck 2>&1 || true)
+  if echo "$out" | grep -q 'scratch/s.md:3'
+  then ok "outside a repository the walk is unchanged and an untracked folder is formatted"
+  else bad "a folder was skipped where there is no repository to ignore it: $out"
+  fi
+  (cd "$G" && git init -q) > /dev/null 2>&1
+  if gcheck > /dev/null 2>&1
+  then ok "a folder git ignores is not formatted"
+  else bad "a folder git ignores was formatted: $(gcheck 2>&1)"
+  fi
+
+  rm "$F/.markdownlint-cli2.jsonc"
   out=$(fcheck 2>&1 || true)
-  if echo "$out" | grep -q 'no conventions/markdown.markdownlint-cli2.jsonc'; then ok "a member without the rules is told to sync"; else bad "missing rules were not reported: $out"; fi
+  if echo "$out" | grep -q 'no .markdownlint-cli2.jsonc'; then ok "a member without the rules is told to sync"; else bad "missing rules were not reported: $out"; fi
 fi
 
 # the workflow's declared release and the marker version cannot drift apart
