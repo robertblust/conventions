@@ -100,8 +100,7 @@ Expected: `0`, `0`, `1`, `1`, each on its own line. `grep -c` exits 1 when the c
 
 - [ ] **Step 5: Run the prose check**
 
-Run: `sh conventions/conventions-check; echo "exit $?"`
-Expected: `✓ every Markdown file follows WRITING.md` and `exit 0`.
+Run: `sh conventions/conventions-check; echo "exit $?"` Expected: `✓ every Markdown file follows WRITING.md` and `exit 0`.
 
 - [ ] **Step 6: Commit**
 
@@ -154,8 +153,7 @@ invoked it proposes the message.
 
 - [ ] **Step 2: Run the prose check**
 
-Run: `sh conventions/conventions-check; echo "exit $?"`
-Expected: `✓ every Markdown file follows WRITING.md` and `exit 0`.
+Run: `sh conventions/conventions-check; echo "exit $?"` Expected: `✓ every Markdown file follows WRITING.md` and `exit 0`.
 
 - [ ] **Step 3: Commit**
 
@@ -282,8 +280,7 @@ its value. No English word changed.
 
 - [ ] **Step 3: Run the prose check**
 
-Run: `sh conventions/conventions-check; echo "exit $?"`
-Expected: `✓ every Markdown file follows WRITING.md` and `exit 0`. The German words in `TRANSLATOR.md` are the marks section repeated from `WRITING.md`, which already passes; if the check names one of them, the word is not in `WRITING.md`'s paragraph and has to be quoted in inline code instead.
+Run: `sh conventions/conventions-check; echo "exit $?"` Expected: `✓ every Markdown file follows WRITING.md` and `exit 0`. The German words in `TRANSLATOR.md` are the marks section repeated from `WRITING.md`, which already passes; if the check names one of them, the word is not in `WRITING.md`'s paragraph and has to be quoted in inline code instead.
 
 - [ ] **Step 4: Commit**
 
@@ -365,8 +362,7 @@ Where Step 1 found a different form for a term, the row carries what was found; 
 
 - [ ] **Step 3: Run the prose check**
 
-Run: `sh conventions/conventions-check; echo "exit $?"`
-Expected: `✓ every Markdown file follows WRITING.md` and `exit 0`. This is the check that the German cells are skipped; a `✗ conventions/GLOSSARY.md:…` line means a German word sits outside inline code.
+Run: `sh conventions/conventions-check; echo "exit $?"` Expected: `✓ every Markdown file follows WRITING.md` and `exit 0`. This is the check that the German cells are skipped; a `✗ conventions/GLOSSARY.md:…` line means a German word sits outside inline code.
 
 - [ ] **Step 4: Commit**
 
@@ -416,8 +412,7 @@ for f in WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.
 
 - [ ] **Step 2: Run the tests and see the three failures**
 
-Run: `sh test/run.sh; echo "exit $?"`
-Expected: three lines `✗ sync did not write conventions/WRITER.md`, `… TRANSLATOR.md`, `… GLOSSARY.md`, then `3 failing` and `exit 1`.
+Run: `sh test/run.sh; echo "exit $?"` Expected: three lines `✗ sync did not write conventions/WRITER.md`, `… TRANSLATOR.md`, `… GLOSSARY.md`, then `3 failing` and `exit 1`.
 
 - [ ] **Step 3: Add the three names to `FILES`**
 
@@ -435,13 +430,11 @@ FILES="WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md
 
 - [ ] **Step 4: Run the tests and see them pass**
 
-Run: `sh test/run.sh; echo "exit $?"`
-Expected: every line begins `✓`, then `all pass` and `exit 0`. The self-update case still trims `conventions-check` from a copy's `FILES` and proves the re-exec; it is untouched by the longer list.
+Run: `sh test/run.sh; echo "exit $?"` Expected: every line begins `✓`, then `all pass` and `exit 0`. The self-update case still trims `conventions-check` from a copy's `FILES` and proves the re-exec; it is untouched by the longer list.
 
 - [ ] **Step 5: Run shellcheck**
 
-Run: `shellcheck conventions/conventions-sync test/run.sh; echo "exit $?"`. `shellcheck` is not installed on this machine; put it in a venv under the session's scratchpad directory first, `python3 -m venv "$SCRATCHPAD/sc" && "$SCRATCHPAD/sc/bin/pip" install shellcheck-py`, and run `"$SCRATCHPAD/sc/bin/shellcheck"` in place of the bare name. CI runs the runner's.
-Expected: no output and `exit 0`.
+Run: `shellcheck conventions/conventions-sync test/run.sh; echo "exit $?"`. `shellcheck` is not installed on this machine; put it in a venv under the session's scratchpad directory first, `python3 -m venv "$SCRATCHPAD/sc" && "$SCRATCHPAD/sc/bin/pip" install shellcheck-py`, and run `"$SCRATCHPAD/sc/bin/shellcheck"` in place of the bare name. CI runs the runner's. Expected: no output and `exit 0`.
 
 - [ ] **Step 6: Commit**
 
@@ -490,8 +483,7 @@ In `.github/workflows/check.yml`, change `CONVENTIONS_RELEASE: v1.4.0` to `CONVE
 
 - [ ] **Step 3: Run the tests for the marker agreement**
 
-Run: `sh test/run.sh; echo "exit $?"`
-Expected: the line `✓ check.yml's release and AGENTS.md's marker agree on v1.5.0`, then `all pass` and `exit 0`.
+Run: `sh test/run.sh; echo "exit $?"` Expected: the line `✓ check.yml's release and AGENTS.md's marker agree on v1.5.0`, then `all pass` and `exit 0`.
 
 - [ ] **Step 4: Update the README's file list**
 
@@ -547,8 +539,7 @@ reports and the session that invoked it commits when the owner asks.
 
 - [ ] **Step 7: Run the prose check and the tests**
 
-Run: `sh conventions/conventions-check; echo "exit $?"` then `sh test/run.sh; echo "exit $?"`
-Expected: `✓ every Markdown file follows WRITING.md`, `exit 0`; `all pass`, `exit 0`.
+Run: `sh conventions/conventions-check; echo "exit $?"` then `sh test/run.sh; echo "exit $?"` Expected: `✓ every Markdown file follows WRITING.md`, `exit 0`; `all pass`, `exit 0`.
 
 - [ ] **Step 8: Commit**
 
@@ -576,8 +567,7 @@ EOF
 
 - [ ] **Step 1: Run everything once more from a clean tree**
 
-Run: `git status --short` (expected: empty), then `sh test/run.sh; echo "exit $?"` and `sh conventions/conventions-check; echo "exit $?"`.
-Expected: `all pass`, `exit 0`; `✓ every Markdown file follows WRITING.md`, `exit 0`.
+Run: `git status --short` (expected: empty), then `sh test/run.sh; echo "exit $?"` and `sh conventions/conventions-check; echo "exit $?"`. Expected: `all pass`, `exit 0`; `✓ every Markdown file follows WRITING.md`, `exit 0`.
 
 - [ ] **Step 2: Push and open the pull request**
 
