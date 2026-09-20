@@ -29,6 +29,7 @@
 The check in Task 2 reads `REPOSITORIES.md` and `README.md`. Both must already be right, or the commit that adds the check turns this repository's own CI red. So the data lands first and on its own.
 
 **Files:**
+
 - Modify: `conventions/REPOSITORIES.md` — the intro paragraph and the table
 - Modify: `conventions/WRITING.md` — one paragraph in the prose register
 - Modify: `README.md:1` — the title of this repository
@@ -129,11 +130,13 @@ MSG
 ### Task 2: The tripwire
 
 **Files:**
+
 - Modify: `test/run.sh` — a new section after the prose-tripwire section, before the `# the workflow's declared release` block at the end
 - Modify: `conventions/conventions-check` — the header comment, and a block between the walk and the exit
 - Modify: `docs/superpowers/specs/2026-09-11-readme-titles-design.md:§5` — the example failure line
 
 **Interfaces:**
+
 - Consumes: the `Title` column written in Task 1; `$ROOT` and the `hits` variable already in `conventions-check`.
 - Produces: the environment variable `CONVENTIONS_REPO`, which overrides identity and is how any test drives the check from a tree that is not a clone. Failure lines are `✗ README.md:1: first line is "<first>", REPOSITORIES.md asks for "# <title>"` and `✗ README.md: <owner/repo> is in REPOSITORIES.md and has no README.md`. Quiet passes are `·` lines.
 
@@ -360,10 +363,12 @@ MSG
 ### Task 3: The release and the pull request
 
 **Files:**
+
 - Modify: `AGENTS.md:1` — the marker version
 - Modify: `.github/workflows/check.yml:8` — `CONVENTIONS_RELEASE`
 
 **Interfaces:**
+
 - Consumes: nothing from Task 2 but a green suite.
 - Produces: the string `v1.10.0` in both places `test/run.sh` compares at the end of its run.
 

@@ -1,7 +1,7 @@
 # Robert Blust — Conventions
 
-How the robertblust, guestgraph and companygraph organizations write and work, in six
-files every repository of the family vendors at a pinned release:
+How the robertblust, guestgraph and companygraph organizations write and work. Every repository
+of the family vendors this at a pinned release, and these are the files it reads first:
 
 - `conventions/WRITING.md` — one voice, three registers, English and German, and how a text is made.
 - `conventions/WORKING.md` — git and GitHub: branches, merge commits, identity, releases, pins.
@@ -92,11 +92,34 @@ be a hit:
 ```
 
 The same job holds every member's Markdown to the one form `WRITING.md` gives it, with the
-rules in `conventions/markdown.markdownlint-cli2.jsonc` and `conventions/markdown-rules.cjs`, so
+rules in `.markdownlint-cli2.jsonc` and `conventions/markdown-rules.cjs`, so
 a table an editor reformatted fails until it is back in the family's form.
 `sh conventions/conventions-format` names each file and line that differs and
 `sh conventions/conventions-format fix` rewrites them. It needs Node 22 or later, since the rules
-are markdownlint's and npx fetches the version the script pins.
+are markdownlint's and npx fetches the version the script pins. What git ignores is left out, so
+a scratch folder a member keeps untracked does not fail a run here that the job, which checks out
+tracked files only, never sees.
+
+One file a member receives sits at its root rather than under `conventions/`, because something
+other than this family reads it there: `.markdownlint-cli2.jsonc` is the rule set under the name
+markdownlint-cli2 and every editor plugin built on it discovers on its own. It is vendored and
+hashed like everything else, so an editor and the shared job read the same rules and a member that
+edits them locally is named by `check`.
+
+Two more, `.vscode/settings.json` and `.vscode/extensions.json`, ask VS Code to format Markdown on
+save with that same library, and those two are the member's own. The extension reads
+`customRules` from the rule set the same way the script does, so the delimiter-row rule runs in
+the editor too — but it is JavaScript, and VS Code runs no JavaScript from a workspace that has
+not been trusted, so the first open of a fresh clone answers that prompt before the form is whole.
+A member whose `.gitignore` covers `.vscode/` has said the editor half is not its business, and
+neither the seed nor the check holds it to one. VS Code reads one settings file
+and one recommendation file per repository and merges nothing, so a member with its own language —
+the engine's Java settings, a site's npm ones — has no second place to put them, and a copy held
+byte for byte would take that place away. So `sync` writes each only where a member has none, from
+the copy under `conventions/`, and never over one that is there. What the family owns is the
+Markdown settings key and the one recommended extension; `conventions-format` compares those
+against the vendored copies, on parsed values rather than text, and says nothing about any other
+key or any other extension.
 
 The form has its own list of what it leaves alone, `format-exclude`, because the two checks skip
 a folder for different reasons. The prose check skips a spec that quotes the words it scans for,

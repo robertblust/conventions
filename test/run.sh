@@ -18,9 +18,29 @@ printf '# member — working conventions\n\nIts own text.\n' > "$MEMBER/AGENTS.m
 
 # sync vendors the files and writes the block
 run sync > /dev/null
-for f in WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md AGENTS.md conventions-sync conventions-check conventions-format markdown.markdownlint-cli2.jsonc markdown-rules.cjs manifest.json; do
+for f in WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md AGENTS.md conventions-sync conventions-check conventions-format markdown-rules.cjs vscode-settings.json vscode-extensions.json manifest.json; do
   [ -f "$MEMBER/conventions/$f" ] || bad "sync did not write conventions/$f"
 done
+# The rule set goes to the member's root, because markdownlint-cli2 and the editor plugins on it
+# read it there and nowhere else.
+if [ -f "$MEMBER/.markdownlint-cli2.jsonc" ]; then ok "sync writes the rule set at the member's root"; else bad "sync did not write the rule set at the member's root"; fi
+if cmp -s "$MEMBER/.markdownlint-cli2.jsonc" "$HERE/.markdownlint-cli2.jsonc"
+then ok "the root rule set is byte-identical to the source"; else bad "the root rule set differs from the source"; fi
+# The two editor files are the member's own: written where it has none, never over one it has.
+for f in .vscode/settings.json .vscode/extensions.json; do
+  if [ -f "$MEMBER/$f" ]; then ok "sync seeds $f where a member has none"; else bad "sync did not seed $f"; fi
+done
+printf '{ "java.compile.nullAnalysis.mode": "automatic" }\n' > "$MEMBER/.vscode/settings.json"
+run sync > /dev/null
+if [ "$(cat "$MEMBER/.vscode/settings.json")" = '{ "java.compile.nullAnalysis.mode": "automatic" }' ]
+then ok "sync leaves a settings file the member already has"
+else bad "sync overwrote the member's own settings file: $(cat "$MEMBER/.vscode/settings.json")"
+fi
+if ! grep -q '"\.vscode/settings\.json"' "$MEMBER/conventions/manifest.json"
+then ok "a seeded file is not hashed into the manifest, so the member may edit it"
+else bad "a seeded file was hashed into the manifest"
+fi
+cp "$MEMBER/conventions/vscode-settings.json" "$MEMBER/.vscode/settings.json"
 if [ -x "$MEMBER/conventions/conventions-check" ]; then ok "conventions-check is vendored executable"; else bad "conventions-check is not vendored executable"; fi
 if [ -x "$MEMBER/conventions/conventions-format" ]; then ok "conventions-format is vendored executable"; else bad "conventions-format is not vendored executable"; fi
 if grep -q '^<!-- conventions · v1.0.0 -->$' "$MEMBER/AGENTS.md" && grep -q '^<!-- end conventions -->$' "$MEMBER/AGENTS.md"
@@ -31,6 +51,10 @@ if cmp -s "$MEMBER/conventions/WRITING.md" "$HERE/conventions/WRITING.md"; then 
 if [ -x "$MEMBER/conventions/conventions-sync" ]; then ok "the vendored script is executable"; else bad "the vendored script is not executable"; fi
 if grep -q '"tag": "v1.0.0"' "$MEMBER/conventions/manifest.json" && grep -q '"conventions/WORKING.md": "sha256:' "$MEMBER/conventions/manifest.json"
 then ok "the manifest records the tag and a hash per file"; else bad "the manifest is incomplete"; fi
+if grep -q '"\.markdownlint-cli2\.jsonc": "sha256:' "$MEMBER/conventions/manifest.json"
+then ok "the manifest hashes a root file under its root path"; else bad "the manifest does not hash the root file"; fi
+if python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$MEMBER/conventions/manifest.json" 2> /dev/null
+then ok "the manifest is valid JSON with both lists in it"; else bad "the manifest is not valid JSON"; fi
 
 # check passes on a fresh sync
 if run check > /dev/null; then ok "check passes after sync"; else bad "check fails after sync"; fi
@@ -45,6 +69,26 @@ echo "edited here" >> "$MEMBER/conventions/WORKING.md"
 out=$(run check 2>&1 || true)
 if echo "$out" | grep -q 'conventions/WORKING.md differs'; then ok "check names an edited vendored file"; else bad "check missed an edited file: $out"; fi
 run sync > /dev/null
+
+# an edited root file is named, as an edited vendored one is
+printf '\n' >> "$MEMBER/.markdownlint-cli2.jsonc"
+out=$(run check 2>&1 || true)
+if echo "$out" | grep -q '\.markdownlint-cli2.jsonc differs'; then ok "check names an edited root file"; else bad "check missed an edited root file: $out"; fi
+rm "$MEMBER/.markdownlint-cli2.jsonc"
+out=$(run check 2>&1 || true)
+if echo "$out" | grep -q '\.markdownlint-cli2.jsonc is missing'; then ok "check names a missing root file"; else bad "check missed a missing root file: $out"; fi
+run sync > /dev/null
+if run check > /dev/null; then ok "sync restores the root files"; else bad "sync did not restore the root files: $(run check 2>&1)"; fi
+
+# what an earlier release vendored and this one does not is removed by sync and named until then
+printf 'the old rule set\n' > "$MEMBER/conventions/markdown.markdownlint-cli2.jsonc"
+out=$(run check 2>&1 || true)
+if echo "$out" | grep -q 'conventions/markdown.markdownlint-cli2.jsonc is what an earlier release vendored'
+then ok "check names a file the release no longer carries"; else bad "a retired file was not named: $out"; fi
+run sync > /dev/null
+if [ ! -f "$MEMBER/conventions/markdown.markdownlint-cli2.jsonc" ]
+then ok "sync removes a file the release no longer carries"; else bad "sync left a retired file in place"; fi
+if run check > /dev/null; then ok "check passes once the retired file is gone"; else bad "check still fails after the retired file was removed: $(run check 2>&1)"; fi
 
 # an edited block is caught, and sync repairs it
 sed -i.bak 's/^- .conventions\/WRITING.md.*$/- gone/' "$MEMBER/AGENTS.md" && rm -f "$MEMBER/AGENTS.md.bak"
@@ -184,6 +228,24 @@ printf '# clean\n' > "$P/docs/kept/a.md"
 if [ -x "$HERE/conventions/conventions-check" ]; then ok "conventions-check is executable"; else bad "conventions-check is not executable"; fi
 if grep -q 'conventions-check' "$HERE/conventions/conventions-sync"; then ok "the sync script vendors conventions-check"; else bad "the sync script does not vendor conventions-check"; fi
 
+# a folder git ignores is not prose the job can see, so the prose check does not read it either
+GI=$TMP/prose-ignored
+mkdir -p "$GI/scratch"
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$GI/conventions.json"
+printf '# kept\n\nA spaced — dash.\n' > "$GI/README.md"
+printf 'The colour of it.\n' > "$GI/scratch/s.md"
+gicheck() { CONVENTIONS_ROOT="$GI" sh "$HERE/conventions/conventions-check"; }
+out=$(gicheck 2>&1 || true)
+if echo "$out" | grep -q 'scratch/s.md:1: colour'
+then ok "outside a repository the prose walk is unchanged"
+else bad "the prose walk skipped a folder where there is no repository: $out"
+fi
+(cd "$GI" && git init -q && printf 'scratch/\n' > .gitignore) > /dev/null 2>&1
+if gicheck > /dev/null 2>&1
+then ok "the prose check does not read a folder git ignores"
+else bad "the prose check read a folder git ignores: $(gicheck 2>&1)"
+fi
+
 # --- conventions-check: the README title -----------------------------------------------------
 # A fixture, not a clone: CONVENTIONS_REPO is what a tree with no remote and no runner uses to
 # say which row is its own. The table here is two rows of the real shape, one ordinary member
@@ -253,7 +315,8 @@ mv "$T/conventions/REPOSITORIES.md.away" "$T/conventions/REPOSITORIES.md"
 # network; CI has both. A machine without npx fails here rather than passing unseen.
 F=$TMP/form
 mkdir -p "$F/conventions" "$F/docs" "$F/vendored" "$F/node_modules/pkg" "$F/.claude/agents"
-cp "$HERE/conventions/markdown.markdownlint-cli2.jsonc" "$HERE/conventions/markdown-rules.cjs" "$F/conventions/"
+cp "$HERE/.markdownlint-cli2.jsonc" "$F/"
+cp "$HERE/conventions/markdown-rules.cjs" "$F/conventions/"
 printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0", "exclude": ["vendored"] }\n' > "$F/conventions.json"
 fcheck() { CONVENTIONS_ROOT="$F" sh "$HERE/conventions/conventions-format" "$@"; }
 # The table the way an editor that lines columns up writes it, alignment colons included, and
@@ -300,6 +363,39 @@ EOF
   else bad "fix did not write the compact table: $(cat "$F/docs/b [draft].md")"
   fi
 
+  # A heading, a list and a fence crowded against their neighbors, which fix opens up. Written
+  # as one file because the three rules meet in ordinary prose exactly like this.
+  # shellcheck disable=SC2016 # literal markdown backticks, not command substitution
+  printf '# D\n## Crowded\nLead-in:\n- one\n- two\n\nAfter.\n```sh\necho hi\n```\n' > "$F/docs/d.md"
+  out=$(fcheck 2>&1 || true)
+  if echo "$out" | grep -q 'docs/d.md:2: MD022' && echo "$out" | grep -q 'docs/d.md:4: MD032' && echo "$out" | grep -q 'docs/d.md:8: MD031'
+  then ok "a crowded heading, list and fence are each named by line and rule"
+  else bad "the structural rules did not fire: $out"
+  fi
+  # shellcheck disable=SC2016 # literal markdown backticks, not command substitution
+  if fcheck fix > /dev/null 2>&1 && [ "$(cat "$F/docs/d.md")" = "$(printf '# D\n\n## Crowded\n\nLead-in:\n\n- one\n- two\n\nAfter.\n\n```sh\necho hi\n```')" ]
+  then ok "fix opens up a crowded heading, list and fence in one run"
+  else bad "fix did not open them up: $(cat "$F/docs/d.md")"
+  fi
+  rm "$F/docs/d.md"
+
+  # Every rule of the form is one the tool can write. The fixture is this repository's own
+  # Markdown, because it exercises far more of the rule set than anything written for a test: a
+  # rule that can only report leaves its hits standing after fix, and check then fails. A
+  # fixture that violates nothing would pass whatever the rule set said, which is the trap.
+  W=$TMP/whole
+  mkdir -p "$W"
+  (cd "$HERE" && tar -cf - --exclude .git .) | (cd "$W" && tar -xf -)
+  if CONVENTIONS_ROOT="$W" sh "$HERE/conventions/conventions-format" fix > /dev/null 2>&1 &&
+     CONVENTIONS_ROOT="$W" sh "$HERE/conventions/conventions-format" > /dev/null 2>&1
+  then ok "fix settles this repository's own Markdown, so no rule of the form only reports"
+  else bad "fix left hits standing over this repository: $(CONVENTIONS_ROOT="$W" sh "$HERE/conventions/conventions-format" 2>&1 | tail -3)"
+  fi
+  if diff -r -q -x .git "$HERE" "$W" > /dev/null 2>&1
+  then ok "and it rewrote nothing, so this repository is already in the form it ships"
+  else bad "fix rewrote this repository: $(diff -r -q -x .git "$HERE" "$W" 2>&1 | head -3)"
+  fi
+
   printf '# C\n\n* a list in stars and _emphasis_ in underscores\n' > "$F/docs/c.md"
   if fcheck fix > /dev/null 2>&1 && [ "$(cat "$F/docs/c.md")" = "$(printf '# C\n\n- a list in stars and *emphasis* in underscores')" ]
   then ok "fix writes dashes for a list and asterisks for emphasis"
@@ -334,9 +430,126 @@ EOF
   if echo "$out" | grep -q '.claude/agents/w.md:4'; then ok "a folder whose name starts with a dot is read"; else bad "a dot folder was skipped: $out"; fi
   rm "$F/.claude/agents/w.md"
 
-  rm "$F/conventions/markdown.markdownlint-cli2.jsonc"
+  # The editor's half of the form: the two .vscode files are the member's own, and what the
+  # family owns of them is one settings key and one recommended id. A member that keeps its own
+  # language settings beside them passes; one that changes the family's part does not.
+  E=$TMP/editor
+  mkdir -p "$E/conventions" "$E/.vscode" "$E/docs"
+  cp "$HERE/.markdownlint-cli2.jsonc" "$E/"
+  cp "$HERE/conventions/markdown-rules.cjs" "$HERE/conventions/vscode-settings.json" "$HERE/conventions/vscode-extensions.json" "$E/conventions/"
+  printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$E/conventions.json"
+  printf '# E\n' > "$E/docs/a.md"
+  cp "$E/conventions/vscode-settings.json" "$E/.vscode/settings.json"
+  cp "$E/conventions/vscode-extensions.json" "$E/.vscode/extensions.json"
+  echeck() { CONVENTIONS_ROOT="$E" sh "$HERE/conventions/conventions-format"; }
+  if echeck > /dev/null 2>&1; then ok "a member seeded from the release passes the editor check"; else bad "a seeded member failed: $(echeck 2>&1)"; fi
+
+  printf '{\n "[markdown]": { "editor.formatOnSave": true, "editor.defaultFormatter": "DavidAnson.vscode-markdownlint" },\n "java.compile.nullAnalysis.mode": "automatic"\n}\n' > "$E/.vscode/settings.json"
+  printf '{ "recommendations": ["redhat.java", "DavidAnson.vscode-markdownlint"] }\n' > "$E/.vscode/extensions.json"
+  if echeck > /dev/null 2>&1
+  then ok "a member keeps its own settings and extensions beside the family's"
+  else bad "a member's own settings were rejected: $(echeck 2>&1)"
+  fi
+
+  printf '{ "[markdown]": { "editor.defaultFormatter": "esbenp.prettier-vscode", "editor.formatOnSave": true } }\n' > "$E/.vscode/settings.json"
+  out=$(echeck 2>&1 || true)
+  if echo "$out" | grep -q 'its "\[markdown\]" is not the release'
+  then ok "a member that changes the family's settings key is named"
+  else bad "a changed settings key was not named: $out"
+  fi
+
+  cp "$E/conventions/vscode-settings.json" "$E/.vscode/settings.json"
+  printf '{ "recommendations": ["redhat.java"] }\n' > "$E/.vscode/extensions.json"
+  out=$(echeck 2>&1 || true)
+  if echo "$out" | grep -q 'is not recommended'
+  then ok "a member that drops the family's extension is named"
+  else bad "a dropped extension was not named: $out"
+  fi
+
+  cp "$E/conventions/vscode-extensions.json" "$E/.vscode/extensions.json"
+  rm "$E/.vscode/settings.json"
+  out=$(echeck 2>&1 || true)
+  if echo "$out" | grep -q '\.vscode/settings.json is missing'
+  then ok "a missing editor file is told to sync"
+  else bad "a missing editor file was not named: $out"
+  fi
+
+  printf '{ "[markdown]":\n' > "$E/.vscode/settings.json"
+  out=$(echeck 2>&1 || true)
+  if echo "$out" | grep -q 'not readable as JSON'
+  then ok "an editor file that does not parse is named, not skipped"
+  else bad "an unparsable editor file was not named: $out"
+  fi
+
+  # A string answers to includes() by matching a substring, so this is the shape that would pass
+  # while VS Code reads nothing from the file.
+  cp "$E/conventions/vscode-settings.json" "$E/.vscode/settings.json"
+  printf '{ "recommendations": "DavidAnson.vscode-markdownlint-and-more" }\n' > "$E/.vscode/extensions.json"
+  out=$(echeck 2>&1 || true)
+  if echo "$out" | grep -q 'is not a list'
+  then ok "a recommendations that is not a list is named, not read as one"
+  else bad "a string recommendations passed as a list: $out"
+  fi
+  cp "$E/conventions/vscode-extensions.json" "$E/.vscode/extensions.json"
+
+  # A member whose .gitignore covers .vscode/ has opted out, and the shared job never sees those
+  # files, so holding it to them would fail every run with no edit that could satisfy it.
+  printf '# E\n\n| a | b |\n|:--------- | ---- |\n| 1 | 2 |\n' > "$E/docs/b.md"
+  rm -rf "$E/.vscode"
+  out=$(echeck 2>&1 || true)
+  if echo "$out" | grep -q 'settings.json is missing'
+  then ok "a member with no editor files and no .gitignore is told to sync"
+  else bad "a missing editor file was not named: $out"
+  fi
+  (cd "$E" && git init -q && printf '.vscode/\n' > .gitignore) > /dev/null 2>&1
+  out=$(echeck 2>&1 || true)
+  if ! echo "$out" | grep -q 'settings.json is missing'
+  then ok "a member that gitignores .vscode is not held to the editor half"
+  else bad "a member that gitignores .vscode was still held to it: $out"
+  fi
+
+  # The two halves are reported together: a member whose editor is wrong still gets its Markdown
+  # written, so one run of fix does everything it can rather than stopping at the first half.
+  rm -f "$E/.gitignore"
+  mkdir -p "$E/.vscode"
+  printf '{ "java.compile.nullAnalysis.mode": "automatic" }\n' > "$E/.vscode/settings.json"
+  cp "$E/conventions/vscode-extensions.json" "$E/.vscode/extensions.json"
+  out=$(CONVENTIONS_ROOT="$E" sh "$HERE/conventions/conventions-format" fix 2>&1 || true)
+  if echo "$out" | grep -q 'fixed where it was not' && echo "$out" | grep -q 'is not the release'
+  then ok "fix writes the Markdown and still reports the editor, in one run"
+  else bad "fix stopped at the editor instead of writing the Markdown: $out"
+  fi
+  if [ "$(cat "$E/docs/b.md")" = "$(printf '# E\n\n| a | b |\n| :--- | --- |\n| 1 | 2 |')" ]
+  then ok "and the table it could fix was fixed"
+  else bad "the table was left unformatted: $(cat "$E/docs/b.md")"
+  fi
+
+  # What git ignores is scratch the shared job never sees, since it checks out tracked files
+  # only; a local run that failed on it would fail where the job is green. The same fixture
+  # before git init proves the walk is unchanged where there is no repository.
+  G=$TMP/ignored
+  mkdir -p "$G/conventions" "$G/scratch"
+  cp "$HERE/.markdownlint-cli2.jsonc" "$G/"
+  cp "$HERE/conventions/markdown-rules.cjs" "$G/conventions/"
+  printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$G/conventions.json"
+  printf 'scratch/\n' > "$G/.gitignore"
+  printf '# G\n' > "$G/keep.md"
+  cp "$TMP/padded.md" "$G/scratch/s.md"
+  gcheck() { CONVENTIONS_ROOT="$G" sh "$HERE/conventions/conventions-format"; }
+  out=$(gcheck 2>&1 || true)
+  if echo "$out" | grep -q 'scratch/s.md:3'
+  then ok "outside a repository the walk is unchanged and an untracked folder is formatted"
+  else bad "a folder was skipped where there is no repository to ignore it: $out"
+  fi
+  (cd "$G" && git init -q) > /dev/null 2>&1
+  if gcheck > /dev/null 2>&1
+  then ok "a folder git ignores is not formatted"
+  else bad "a folder git ignores was formatted: $(gcheck 2>&1)"
+  fi
+
+  rm "$F/.markdownlint-cli2.jsonc"
   out=$(fcheck 2>&1 || true)
-  if echo "$out" | grep -q 'no conventions/markdown.markdownlint-cli2.jsonc'; then ok "a member without the rules is told to sync"; else bad "missing rules were not reported: $out"; fi
+  if echo "$out" | grep -q 'no .markdownlint-cli2.jsonc'; then ok "a member without the rules is told to sync"; else bad "missing rules were not reported: $out"; fi
 fi
 
 # the workflow's declared release and the marker version cannot drift apart
