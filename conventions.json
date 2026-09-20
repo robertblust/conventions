@@ -1,1 +1,1 @@
-{ "exclude": ["docs/superpowers", ".superpowers"], "format-exclude": [".superpowers"] }
+{ "exclude": ["docs/superpowers"], "format-exclude": [] }
