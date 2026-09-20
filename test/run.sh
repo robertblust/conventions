@@ -398,7 +398,9 @@ EOF
   # markdownlint blanks the inside of an HTML comment in the lines it hands a rule, so that no
   # rule fires on what a writer commented out. A fix built from those lines writes the dots back
   # as the text, which is how the conventions block in a spec lost its words once.
+  # shellcheck disable=SC2016 # literal markdown backticks, not command substitution
   printf '# F\n\nThe block is `<!-- conventions - vN -->` and it\nspans two lines.\n' > "$F/docs/f.md"
+  # shellcheck disable=SC2016 # literal markdown backticks, not command substitution
   if fcheck fix > /dev/null 2>&1 &&
      [ "$(cat "$F/docs/f.md")" = "$(printf '# F\n\nThe block is `<!-- conventions - vN -->` and it spans two lines.')" ]
   then ok "joining a paragraph keeps the text inside an HTML comment"
