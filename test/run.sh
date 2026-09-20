@@ -379,14 +379,22 @@ EOF
   fi
   rm "$F/docs/d.md"
 
-  # Every rule of the form can be written by the tool. A rule that only reported would leave
-  # fix green with hits still standing, which is what this asserts against.
-  printf '# E\n\nA line.\n' > "$F/docs/e.md"
-  if fcheck fix > /dev/null 2>&1 && fcheck > /dev/null 2>&1
-  then ok "fix leaves a tree the check passes, so no rule of the form only reports"
-  else bad "fix left hits standing: $(fcheck 2>&1)"
+  # Every rule of the form is one the tool can write. The fixture is this repository's own
+  # Markdown, because it exercises far more of the rule set than anything written for a test: a
+  # rule that can only report leaves its hits standing after fix, and check then fails. A
+  # fixture that violates nothing would pass whatever the rule set said, which is the trap.
+  W=$TMP/whole
+  mkdir -p "$W"
+  (cd "$HERE" && tar -cf - --exclude .git .) | (cd "$W" && tar -xf -)
+  if CONVENTIONS_ROOT="$W" sh "$HERE/conventions/conventions-format" fix > /dev/null 2>&1 &&
+     CONVENTIONS_ROOT="$W" sh "$HERE/conventions/conventions-format" > /dev/null 2>&1
+  then ok "fix settles this repository's own Markdown, so no rule of the form only reports"
+  else bad "fix left hits standing over this repository: $(CONVENTIONS_ROOT="$W" sh "$HERE/conventions/conventions-format" 2>&1 | tail -3)"
   fi
-  rm "$F/docs/e.md"
+  if diff -r -q -x .git "$HERE" "$W" > /dev/null 2>&1
+  then ok "and it rewrote nothing, so this repository is already in the form it ships"
+  else bad "fix rewrote this repository: $(diff -r -q -x .git "$HERE" "$W" 2>&1 | head -3)"
+  fi
 
   printf '# C\n\n* a list in stars and _emphasis_ in underscores\n' > "$F/docs/c.md"
   if fcheck fix > /dev/null 2>&1 && [ "$(cat "$F/docs/c.md")" = "$(printf '# C\n\n- a list in stars and *emphasis* in underscores')" ]
@@ -471,6 +479,49 @@ EOF
   if echo "$out" | grep -q 'not readable as JSON'
   then ok "an editor file that does not parse is named, not skipped"
   else bad "an unparsable editor file was not named: $out"
+  fi
+
+  # A string answers to includes() by matching a substring, so this is the shape that would pass
+  # while VS Code reads nothing from the file.
+  cp "$E/conventions/vscode-settings.json" "$E/.vscode/settings.json"
+  printf '{ "recommendations": "DavidAnson.vscode-markdownlint-and-more" }\n' > "$E/.vscode/extensions.json"
+  out=$(echeck 2>&1 || true)
+  if echo "$out" | grep -q 'is not a list'
+  then ok "a recommendations that is not a list is named, not read as one"
+  else bad "a string recommendations passed as a list: $out"
+  fi
+  cp "$E/conventions/vscode-extensions.json" "$E/.vscode/extensions.json"
+
+  # A member whose .gitignore covers .vscode/ has opted out, and the shared job never sees those
+  # files, so holding it to them would fail every run with no edit that could satisfy it.
+  printf '# E\n\n| a | b |\n|:--------- | ---- |\n| 1 | 2 |\n' > "$E/docs/b.md"
+  rm -rf "$E/.vscode"
+  out=$(echeck 2>&1 || true)
+  if echo "$out" | grep -q 'settings.json is missing'
+  then ok "a member with no editor files and no .gitignore is told to sync"
+  else bad "a missing editor file was not named: $out"
+  fi
+  (cd "$E" && git init -q && printf '.vscode/\n' > .gitignore) > /dev/null 2>&1
+  out=$(echeck 2>&1 || true)
+  if ! echo "$out" | grep -q 'settings.json is missing'
+  then ok "a member that gitignores .vscode is not held to the editor half"
+  else bad "a member that gitignores .vscode was still held to it: $out"
+  fi
+
+  # The two halves are reported together: a member whose editor is wrong still gets its Markdown
+  # written, so one run of fix does everything it can rather than stopping at the first half.
+  rm -f "$E/.gitignore"
+  mkdir -p "$E/.vscode"
+  printf '{ "java.compile.nullAnalysis.mode": "automatic" }\n' > "$E/.vscode/settings.json"
+  cp "$E/conventions/vscode-extensions.json" "$E/.vscode/extensions.json"
+  out=$(CONVENTIONS_ROOT="$E" sh "$HERE/conventions/conventions-format" fix 2>&1 || true)
+  if echo "$out" | grep -q 'fixed where it was not' && echo "$out" | grep -q 'is not the release'
+  then ok "fix writes the Markdown and still reports the editor, in one run"
+  else bad "fix stopped at the editor instead of writing the Markdown: $out"
+  fi
+  if [ "$(cat "$E/docs/b.md")" = "$(printf '# E\n\n| a | b |\n| :--- | --- |\n| 1 | 2 |')" ]
+  then ok "and the table it could fix was fixed"
+  else bad "the table was left unformatted: $(cat "$E/docs/b.md")"
   fi
 
   # What git ignores is scratch the shared job never sees, since it checks out tracked files
