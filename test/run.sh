@@ -18,9 +18,15 @@ printf '# member — working conventions\n\nIts own text.\n' > "$MEMBER/AGENTS.m
 
 # sync vendors the files and writes the block
 run sync > /dev/null
-for f in WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md AGENTS.md conventions-sync conventions-check conventions-format markdown-rules.cjs vscode-settings.json vscode-extensions.json manifest.json; do
+for f in WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md GERMAN.md EDITOR.md BACKREADER.md AGENTS.md conventions-sync conventions-check conventions-format markdown-rules.cjs vscode-settings.json vscode-extensions.json manifest.json; do
   [ -f "$MEMBER/conventions/$f" ] || bad "sync did not write conventions/$f"
 done
+# The design check reads the refused forms from this block, one "form → replacement" a line.
+banned=$(awk '/^```banned$/{f=1;next} /^```$/{f=0} f' "$MEMBER/conventions/GERMAN.md" 2>/dev/null || true)
+if [ -n "$banned" ] && ! printf '%s\n' "$banned" | grep -qv '^[^→]\{1,\} → [^→]\{1,\}$'
+then ok "GERMAN.md's banned block is one form → replacement a line"
+else bad "GERMAN.md's banned block is missing or has a line that is not form → replacement"
+fi
 # The rule set goes to the member's root, because markdownlint-cli2 and the editor plugins on it
 # read it there and nowhere else.
 if [ -f "$MEMBER/.markdownlint-cli2.jsonc" ]; then ok "sync writes the rule set at the member's root"; else bad "sync did not write the rule set at the member's root"; fi
