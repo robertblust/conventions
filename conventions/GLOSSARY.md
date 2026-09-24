@@ -47,5 +47,19 @@ The German cells are inline code because the prose check reads no language and a
 | evidence | evidence | `Beleg` | The fact a claim rests on, in the cell beside it. Same sentence as above. |
 | declare | declares | `deklariert` | Of what a schema states a type carries, or an instance states of itself. Not `erklärt`, which reads as explains. |
 | Swiss Standard German | Swiss Standard German | `Schweizer Hochdeutsch` | The written German of Switzerland, de-CH, the second language every page carries. Never `Swiss German`, which in English names the spoken dialect, `Schweizerdeutsch`, and which no page carries; an agent reading that name concludes the pages are in dialect. Neuter, `das Schweizer Hochdeutsch`. |
+| site | site | `Website` | A site of several pages. `Seite` is one page of it, and a sentence about the whole site that says `Seite` contradicts itself on a page whose own text is English. |
+| page | page | `Seite` | One page of a site. |
+| company | company | `Firma` | The owner's choice over `Unternehmen`, feminine, `die Firma`. `Unternehmensführung` stays, a fixed term for the discipline rather than a word for one company. |
+| company of one | company of one | `Ein-Personen-Firma` | One compound, as German writes it, not the phrase `Firma aus einer Person`. |
+| decision | decision | `Entscheid` | A decision taken, the Swiss form. `Entscheidung` stays for the act of deciding, as in `Entscheidungshilfe`. |
+| release | release | `Release` | A tagged release. Kept English like `Build` and `Commit`, and neuter, `das Release`; `Freigabe` is a gate's approval and is not meant. |
+| deck | deck | `Präsentation` | The file a talk is given from. Feminine, `die Präsentation`; the talk itself is `Vortrag`. |
+| meter | meter | `Abrechnungsgrösse` | The one unit a bill is computed from. Not `Zähler`, which reads as a device. |
+| career break | career break | `Auszeit` | Alone, not `berufliche Auszeit`; the sentence around it says it is from work. |
+| role | role | `Rolle` | A position held, as the Role kind is. Never `Stelle`, which is the employment itself. |
+| independent period | independent period | `Phase der Selbständigkeit` | The prose around the Independent kind, whose name stays English in both views. |
+| standard | standard | `Massstab` | A yardstick. Not `Anspruch`, which is this table's claim. |
+| takeaway | takeaway | `Fazit` | The label that closes a talk's argument. |
+| Software Engineer & Architect | Software Engineer & Architect | `Software Engineer & Architect` | The owner's title, English in both views, as Swiss IT titles usually are; in a sentence, `Software Engineer und Architect`. |
 
-English forms fixed here whose German no page carries yet, to be chosen the first time a text needs them: pack, design system, deck.
+English forms fixed here whose German no page carries yet, to be chosen the first time a text needs them: pack, design system.
