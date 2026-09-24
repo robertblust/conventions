@@ -420,15 +420,18 @@ EOF
   # fixture that violates nothing would pass whatever the rule set said, which is the trap.
   W=$TMP/whole
   mkdir -p "$W"
-  (cd "$HERE" && tar -cf - --exclude .git .) | (cd "$W" && tar -xf -)
+  # The repository's own files, tracked or about to be, and not what git ignores: a worktree's
+  # plan scratch or an editor's settings are nobody's Markdown to hold to the form.
+  (cd "$HERE" && git ls-files -z --cached --others --exclude-standard | xargs -0 tar -cf -) | (cd "$W" && tar -xf -)
   if CONVENTIONS_ROOT="$W" sh "$HERE/conventions/conventions-format" fix > /dev/null 2>&1 &&
      CONVENTIONS_ROOT="$W" sh "$HERE/conventions/conventions-format" > /dev/null 2>&1
   then ok "fix settles this repository's own Markdown, so no rule of the form only reports"
   else bad "fix left hits standing over this repository: $(CONVENTIONS_ROOT="$W" sh "$HERE/conventions/conventions-format" 2>&1 | tail -3)"
   fi
-  if diff -r -q -x .git "$HERE" "$W" > /dev/null 2>&1
+  rewrote=$(cd "$HERE" && git ls-files --cached --others --exclude-standard | while IFS= read -r f; do cmp -s "$f" "$W/$f" || echo "$f"; done)
+  if [ -z "$rewrote" ]
   then ok "and it rewrote nothing, so this repository is already in the form it ships"
-  else bad "fix rewrote this repository: $(diff -r -q -x .git "$HERE" "$W" 2>&1 | head -3)"
+  else bad "fix rewrote this repository: $(printf '%s\n' "$rewrote" | head -3)"
   fi
 
   printf '# C\n\n* a list in stars and _emphasis_ in underscores\n' > "$F/docs/c.md"
