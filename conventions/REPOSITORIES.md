@@ -6,7 +6,7 @@ Three organizations, one family. `robertblust` holds the person and the shared m
 | --- | --- | --- | --- | --- |
 | robertblust/conventions | Robert Blust — Conventions | how the family writes and works, vendored by every member | main | ~/git/robertblust/conventions |
 | robertblust/design | Robert Blust — Design | the design system shared by the three sites: tokens, chrome, page checks | main | ~/git/robertblust/design |
-| robertblust/robertblust.github.io | blust.ch | blust.ch, the profile page and two talks | main | ~/git/robertblust/robertblust.github.io |
+| robertblust/robertblust.github.io | blust.ch | blust.ch, the profile page and its talks | main | ~/git/robertblust/robertblust.github.io |
 | robertblust/mental-model | Robert Blust — Mental Model | Robert Blust described in CompanyGraph, the reference instance | main | ~/git/robertblust/mental-model |
 | robertblust/field-notes | Robert Blust — Field Notes | problems that took real work to understand, one file each | main | ~/git/robertblust/field-notes |
 | robertblust/mcp-blust-ch | mcp.blust.ch | mcp.blust.ch, the reference instance served over MCP from a pinned commit of the model | main | ~/git/robertblust/mcp-blust-ch |
