@@ -62,3 +62,10 @@ Each row is a sentence the editor flagged and the owner settled, kept where it g
 | «Der Haken» | «Der Aufhänger» | The hook of a talk; «Haken» is a catch. |
 | «wie Arbeit fliesst» | «wie die Arbeit abläuft» | The English picture of flow. |
 | «Menschen richten sich schneller aus» | «Menschen finden schneller eine gemeinsame Linie» | *Align* word for word. |
+| «Zusammenführen ist einfach. Falsch liegen ist teuer.» | «Treffer finden ist einfach. Danebenliegen ist teuer.» | *Matching* is finding a match, not merging. |
+| «Jede Ablehnung trägt einen Typ» | «Jede Ablehnung nennt ihren Typ» | *Carries* is not «trägt». |
+| «kein Wegzoll» | «keine Pflichtgebühr» | *A toll* is a charge one must pay. |
+| «Wie über Identität entschieden wird» | «Wie Identität festgestellt wird» | The heading of a process. |
+| «Nur würden keine zwei Leute am selben Ort nachschauen» | «Nur schaut jeder an einem anderen Ort nach» | On a slide the owner took the plain indicative. |
+| «Ein Graph.» | «Ein einziger Graph.» | *One* graph, not *a* graph, where the number is the point. |
+| «Nicht pro Sitzplatz» | «Nicht pro Nutzer» | A license seat is not a theater seat. |
