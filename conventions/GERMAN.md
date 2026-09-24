@@ -16,7 +16,6 @@ Where Switzerland and Germany write different words, the page writes Switzerland
 | `allfällig` | `etwaig` | |
 | `Auftragsbearbeiter` | `Auftragsverarbeiter` | The revised DSG's term; where a page names the GDPR too, the GDPR term follows in brackets. |
 | `bearbeiten` (Daten) | `verarbeiten` (Daten) | The DSG's verb for what is done with personal data. |
-| `Website` | `Seite` for a site | `Seite` is one page; a site of several pages is a `Website`. |
 | `per` (Datum) | `zum` (Datum) | Of a date something takes effect. |
 | `innert` | `innerhalb von` | Of a period of time. |
 
@@ -38,15 +37,13 @@ Each of these was found on the pages, more than once, by a German-only read. A t
 
 ## Forms the check refuses
 
-One form a line, the refused form, an arrow and the form the page writes. The page check reads this block from the vendored copy and fails on any refused form inside a German value, matched case-insensitively and as a whole phrase, so a form enters it only where it is wrong in every sentence it could appear in; a form that is wrong only in some sentences belongs in the tables above, where the editor weighs it.
+One form a line, the refused form, an arrow and the form the page writes. The page check reads this block from the vendored copy and fails on any refused form inside a German value, matched case-insensitively and as a whole phrase — the informal plural and a bare count of the years are rules of the check itself and stay out of this block — so a form enters it only where it is wrong in every sentence it could appear in; a form that is wrong only in some sentences belongs in the tables above, where the editor weighs it.
 
 ```banned
 Reservierung → Reservation
 selbstständig → selbständig
 Offener Kern → Open Core
-Open Source → quelloffen, or Open-Source- in a compound
-eure → Ihre
-euch → Sie
+Open Source → quelloffen
 Takeaway → Fazit
 Requirements → Anforderungen
 ```
