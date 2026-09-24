@@ -43,7 +43,6 @@ One form a line, the refused form, an arrow and the form the page writes. The pa
 ```banned
 Reservierung → Reservation
 selbstständig → selbständig
-Auftragsverarbeiter → Auftragsbearbeiter
 Offener Kern → Open Core
 Open Source → quelloffen, or Open-Source- in a compound
 eure → Ihre

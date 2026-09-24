@@ -485,5 +485,5 @@ Remove the marker worktree and branch by name after the merge: `git worktree rem
 Three plans follow, each written once the one before it is merged:
 
 1. **The member wave to v1.29.0**, in `REPOSITORIES.md` order, one pull request each, with the three adapters where a member carries `translator.md`.
-2. **Design**: the three `typography` rules, `german-stale`, the `translates` element form, `design german` and the generated note, one release.
+2. **Design**: the four `typography` rules, `german-stale`, the `translates` element form, `design german` and the generated note, one release.
 3. **blust.ch from the pilot**: the German in the worktree `robertblust.github.io-german-pilot`, the design re-pin, `npm run pages`, `npm run og`, the narration on the owner's word; then the guestgraph.io and companygraph.io passes.

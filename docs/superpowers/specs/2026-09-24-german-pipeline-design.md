@@ -96,11 +96,12 @@ The editor and the back-reader carry no Edit tool: they return values, and the d
 
 ## 5. Checks in `robertblust/design`
 
-`typography` in `verify/pages.mjs` holds every cold `-de` value to `DE_RULES` today. It gains three rules:
+`typography` in `verify/pages.mjs` holds every cold `-de` value to `DE_RULES` today. It gains four rules:
 
 - An empty value. `data-de=""` fails, naming the element.
 - The refused forms, read from the site's vendored `conventions/GERMAN.md`, the `banned` fenced block, the way the English stems are read from `conventions-check`. A form matches case-insensitively and as a whole phrase: the pilot's own pass flagged «Über fünfundzwanzig Jahre» for the refused bare count because it matched lower case only.
 - The informal plural as address: `eure`, `euer`, `euch`, beside the du-forms already there.
+- A bare count of the years: «fünfundzwanzig Jahre» not preceded by «über», matched case-insensitively, because *over twenty-five years* is a floor and a bare count is a claim the pages do not make.
 
 **Stale German** is a new check, `german-stale`, run on a pull request against its base. It reads each page at the base commit and at the head, pairs `-de` values that are identical in both, and fails where a pair's English changed. Identical German is what makes the pairing robust: an element inserted above another shifts every index but not its German. An English edit that leaves the German right on purpose names the element in a `german-unchanged` list in the page's spec, with the reason in the commit.
 
@@ -113,7 +114,7 @@ The editor and the back-reader carry no Edit tool: they return values, and the d
 ## 6. Order
 
 1. **Conventions.** This spec, then one pull request with the four role files, `GERMAN.md`, the glossary rows, `WRITING.md` and the README recipe; tagged v1.29.0 on the owner's word. The member wave adds the two adapters where a member carries `translator.md`.
-2. **Design.** The three `typography` rules, `german-stale`, the `translates` form, `design german` and the note; one release.
+2. **Design.** The four `typography` rules, `german-stale`, the `translates` form, `design german` and the note; one release.
 3. **blust.ch.** The pilot's German, the re-pin to that design release, `npm run pages` for the three generated notes, `npm run og` for the eleven share cards, and the German narration: 19 clips whose notes changed, about 7,600 billed characters, on the owner's word.
 4. **guestgraph.io, then companygraph.io.** The pipeline over every page, one branch each, seeded with the review's findings: the empty Apaleo section, the Reservation and DSG forms, «Offener Kern» and «Schnittstelle», and the rest. The owner gets one flagged list per site; the glossary and `GERMAN.md` grow from it.
 
@@ -177,7 +178,6 @@ One form a line, the refused form, an arrow and the form the page writes. The pa
 ```banned
 Reservierung → Reservation
 selbstständig → selbständig
-Auftragsverarbeiter → Auftragsbearbeiter
 Offener Kern → Open Core
 Open Source → quelloffen, or Open-Source- in a compound
 eure → Ihre
