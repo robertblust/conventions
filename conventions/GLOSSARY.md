@@ -101,5 +101,7 @@ The German cells are inline code because the prose check reads no language and a
 | agentic AI | agentic AI | `agentische KI` | AI that acts through agents; lower case adjective, `KI` as German abbreviates it. |
 | IT architect | IT architect | `IT-Architekt` | The owner's role from October 2026; hyphenated as German writes it. |
 | lead engineer | lead engineer | `Lead Engineer` | A job title, English in both languages as Swiss IT titles usually are; `Lead` alone for the lead role. |
+| head of technology | head of technology | `Head of Technology` | A job title, English in both languages as Swiss IT titles usually are, like `Lead Engineer`; blust.ch's first post. |
+| a talk's claim | claim | `Behauptung` | The thesis a talk argues and a post takes up, as blust.ch's deciding-well talk and its post write it. The table's `Anspruch` stays what a profile asserts beside its evidence. |
 
 English forms fixed here whose German no page carries yet, to be chosen the first time a text needs them: pack, design system.
