@@ -5,6 +5,7 @@ How the robertblust, guestgraph and companygraph organizations write and work. E
 - `conventions/WRITING.md` — one voice, three registers, English and German, and how a text is made.
 - `conventions/WORKING.md` — git and GitHub: branches, merge commits, identity, releases, pins.
 - `conventions/REPOSITORIES.md` — the family, and what pins what.
+- `conventions/PINS.md` — how a member declares its pins in `pins.json`, for the family resync.
 - `conventions/WRITER.md`, `conventions/TRANSLATOR.md`, `conventions/EDITOR.md` and `conventions/BACKREADER.md` — the four roles that make a text: what each takes, produces and never does.
 - `conventions/GLOSSARY.md` — every family term in its fixed English and German form.
 - `conventions/GERMAN.md` — what Swiss Standard German asks beyond its marks: the Swiss words, the habits to avoid, the forms a check refuses and the owner's choices.
@@ -114,6 +115,14 @@ The repository mirrors what it vendors. The shared files sit under `conventions/
 ## Releasing
 
 A tag and a GitHub Release with notes in the prose register: what changed, what breaks, how to take it. Any change to a vendored file is at least a minor release, because it makes every copy stale. A change to the block's shape or the script's commands is a major. Before tagging, set the version in the first line of `AGENTS.md` to the new tag, and set `CONVENTIONS_RELEASE` in `.github/workflows/check.yml` to the same tag; a test fails when the two disagree. `REPOSITORIES.md` lists the members in the order to re-sync them.
+
+## Keeping the family in step
+
+`node family/report.mjs` reads every member's pins from GitHub — the members from the table in `conventions/REPOSITORIES.md`, and from each member's `main` its `pins.json` and the files a pin can sit in — and sets each against what its upstream offers: the latest release for a tag, the head of `main` for a commit. It writes `dist/resync-<date>.md` for a reader and `dist/resync-<date>.json` for the run, overwrites both when it runs again the same day, and changes nothing else. It needs `gh` with read access to the three organizations.
+
+`node family/resync.mjs dist/resync-<date>.json all`, or chain numbers from the report in place of `all`, moves the chosen chains level by level: one pull request per member, merged once its required check passes, and a minor release wherever a later level takes the member by tag. A conventions or service-conventions pin is a chain of its member alone, and moving only such a pin releases nothing, because what takes the member re-syncs those files from their own source; its pull request's branch is `resync-vendored-<date>`, so the next report does not offer that merge as a release either. It blocks a member rather than guess, holds what is downstream of it, and writes `dist/resync-run-<date>.md`. A member whose `main` already holds its moved pins is left as it is, and a member that a run merged but did not release is offered again in the next report as a chain of its own. `--dry-run` stops each member at its local commit, on its own `dry-run-<date>` branch, so a later real run starts clean. `conventions/WORKING.md` says why the run may merge on its own. The `family-report` and `family-resync` skills in `.claude/skills/` are how an agent runs the two.
+
+A member joins by adding `pins.json`, as `conventions/PINS.md` describes. Until it does, the report shows its pins as unmanaged and the run leaves it alone.
 
 ## Tests
 

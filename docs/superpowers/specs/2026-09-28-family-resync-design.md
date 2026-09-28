@@ -52,7 +52,7 @@ A member's `pins.json` lists its pins and its two member-wide steps:
 }
 ```
 
-`after` runs in the worktree once that pin has moved, in order. Any entry may give `move`, a command with `{version}` in it, which replaces the kind's own move; `core-release` must. A commit pin may give `watch`, a list of paths in the upstream; it is then behind only when a commit since the pinned one touches one of them, so the connector is not re-pinned for an engine change that left its contracts alone. `verify` runs once all of a member's pins have moved. `release` runs when the member is released and leaves the version bump uncommitted for the run to commit. A member that releases nothing has no `release`.
+`after` runs in the worktree once that pin has moved, in order. Any entry may give `move`, a command with `{version}` in it, which replaces the kind's own move; `core-release` must. A commit pin may give `watch`, a list of paths in the upstream; it is then behind only when a commit since the pinned one touches one of them, so the connector is not re-pinned for an engine change that left its contracts alone. `verify` runs once all of a member's pins have moved. `release` runs when the member is released, with `{version}` for the new version without its `v`, and leaves the bump uncommitted for the run to commit. A member that releases nothing has no `release`.
 
 The conventions pin is declared like any other, so a member's `pins.json` is the whole of what it takes. A test in `test/run.sh` holds the format, and the report holds each entry to the line it names.
 
@@ -64,9 +64,11 @@ It reads the members from the table in `REPOSITORIES.md`, and for each member re
 
 Each pin has one status. **current**: nothing to do. **behind**: a newer release, or a newer commit, is there to take. **unmanaged**: the pin is in the member's files and not in its `pins.json`, or the member has no `pins.json`; it is shown and never moved. **drift**: a `pins.json` entry names a line the file does not hold. A member other members take from is **blocked** when `main` holds commits since its last tag.
 
-The Markdown opens with the count of each status and the blocked members. Then one table per level, 0 to 4, with the member, the pin as kind and file, the upstream, what is pinned, what is available and the status. Then the chains, numbered: each behind pin, and every member downstream of it that would have to release or re-pin for the change to reach the last level, as `meta-model v0.56.0 → mcp-server → chat-server → mcp-blust-ch`. Last, what disagrees: a pin the members hold that the paragraph and drawing of `REPOSITORIES.md` do not show, a member of the table the scan could not reach, and a pin whose upstream is outside the family, which is named and never followed.
+The Markdown opens with the count of each status and the blocked members. Then one table per level, 0 to 4, with the member, the pin as kind and file, the upstream, what is pinned, what is available and the status. Then the chains, numbered: each behind pin, and every member downstream of it that would have to release or re-pin for the change to reach the last level, as `meta-model v0.56.0 → mcp-server → chat-server → mcp-blust-ch`. Last, what disagrees: a pin the members hold that the drawing in `REPOSITORIES.md` does not show — the drawing is the form a script can read, and the note beside it holds the paragraph to it —, a member of the table the scan could not reach, and a pin whose upstream is outside the family, which is named and never followed.
 
 The level of a member is one more than the highest level of what it pins, computed from the pins and not taken from the re-sync order in `REPOSITORIES.md`. A cycle is reported and blocks every member on it.
+
+A member's pin on itself, as conventions' own `conventions.json` is, is not an edge.
 
 ## 5. The run
 

@@ -4,3 +4,6 @@ node_modules
 .vscode
 .claudian
 .superpowers
+
+# The family report and the resync write here; what they write is regenerated, never kept.
+/dist

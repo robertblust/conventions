@@ -18,7 +18,7 @@ printf '# member — working conventions\n\nIts own text.\n' > "$MEMBER/AGENTS.m
 
 # sync vendors the files and writes the block
 run sync > /dev/null
-for f in WRITING.md WORKING.md REPOSITORIES.md WRITER.md TRANSLATOR.md GLOSSARY.md GERMAN.md EDITOR.md BACKREADER.md AGENTS.md conventions-sync conventions-check conventions-format markdown-rules.cjs vscode-settings.json vscode-extensions.json manifest.json; do
+for f in WRITING.md WORKING.md REPOSITORIES.md PINS.md WRITER.md TRANSLATOR.md GLOSSARY.md GERMAN.md EDITOR.md BACKREADER.md AGENTS.md conventions-sync conventions-check conventions-format markdown-rules.cjs vscode-settings.json vscode-extensions.json manifest.json; do
   [ -f "$MEMBER/conventions/$f" ] || bad "sync did not write conventions/$f"
 done
 # The design check reads the refused forms from this block, one "form → replacement" a line.
@@ -519,6 +519,16 @@ awk '/^\| robertblust\/conventions \|/ { print; print "| robertblust/new-member 
 if [ "$(undrawn "$TMP/REPOSITORIES.md")" = "robertblust/new-member" ]
 then ok "a repository added to the table and not to the drawing is reported"
 else bad "an undrawn repository was not reported: $(undrawn "$TMP/REPOSITORIES.md")"
+fi
+
+# The family report and run carry their own tests, on Node's runner.
+if command -v node > /dev/null 2>&1; then
+  if node --test "$HERE"/test/family/*.test.mjs > "$TMP/family.out" 2>&1
+  then ok "the family report and run pass their tests"
+  else bad "the family tests failed: $(tail -30 "$TMP/family.out")"
+  fi
+else
+  bad "node is not on the path, so the family tests did not run"
 fi
 
 # the workflow's declared release and the marker version cannot drift apart
