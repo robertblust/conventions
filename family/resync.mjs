@@ -34,7 +34,7 @@ export function runResync({ report, selection, dryRun, github, member, date, out
     return out;
   };
   try {
-    orchestrate({ report, selection, github, member, date, log, record });
+    orchestrate({ report, selection, github, member, date, dryRun, log, record });
   } catch (err) {
     if (!err.message.startsWith('no chain')) console.error(`the run stopped; its record is at ${write()}`);
     throw err;

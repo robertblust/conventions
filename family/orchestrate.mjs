@@ -16,7 +16,7 @@ export const nextMinor = (tag) => {
   return `v${m[1]}.${Number(m[2]) + 1}.0`;
 };
 
-export function orchestrate({ report, selection, github, member, date, log = () => {}, record = [] }) {
+export function orchestrate({ report, selection, github, member, date, dryRun = false, log = () => {}, record = [] }) {
   const chosen = selection === 'all'
     ? report.chains
     : selection.map((n) => {
@@ -31,6 +31,14 @@ export function orchestrate({ report, selection, github, member, date, log = () 
   const family = new Set(report.members.map((m) => m.repo));
   const state = new Map();
   const holds = new Set(['blocked', 'held', 'unmanaged']);
+  // A dry run releases nothing, so what takes a member it would have released finds nothing
+  // behind; it says what it would re-pin instead of that it has nothing to move.
+  const wouldRelease = new Set();
+  const release = (repo, ...args) => {
+    const tag = member.release(repo, ...args).tag;
+    if (dryRun) wouldRelease.add(repo);
+    return tag;
+  };
   const top = Math.max(0, ...[...closure].map((r) => levelOf.get(r) ?? 0));
   for (let l = 1; l <= top; l++) {
     const cache = new Map();
@@ -62,19 +70,21 @@ export function orchestrate({ report, selection, github, member, date, log = () 
       if (releasing && pendingRelease(github, repo)) {
         const unreleased = releaseBlock(github, repo);
         if (unreleased) return ['blocked', { reason: unreleased }];
-        const release = member.release(repo, nextMinor(github.latestRelease(repo)?.tag), pendingNotes(), current.declared.release ?? [], { date }).tag;
-        return ['done', { release }];
+        return ['done', { release: release(repo, nextMinor(github.latestRelease(repo)?.tag), pendingNotes(), current.declared.release ?? [], { date }) }];
       }
-      return ['skipped', { reason: 'nothing to move' }];
+      const upstreams = managedEdges.filter((e) => e.from === repo && wouldRelease.has(e.to) && e.kinds.some((k) => !NON_PROPAGATING.has(k))).map((e) => e.to).sort();
+      if (!upstreams.length) return ['skipped', { reason: 'nothing to move' }];
+      if (releasing) wouldRelease.add(repo);
+      return ['skipped', { reason: `would re-pin ${upstreams.join(', ')} once ${upstreams.length === 1 ? 'it releases' : 'they release'}` }];
     }
     const releases = releasing && pins.some((p) => !NON_PROPAGATING.has(p.kind));
     const unreleased = releases ? releaseBlock(github, repo) : null;
     if (unreleased) return ['blocked', { reason: unreleased }];
     const landed = member.update(repo, pins, { date, verify: current.declared.verify ?? [] });
     landedWith(landed);
-    const release = releases
-      ? member.release(repo, nextMinor(github.latestRelease(repo)?.tag), releaseNotes(pins), current.declared.release ?? [], { date }).tag
+    const tag = releases
+      ? release(repo, nextMinor(github.latestRelease(repo)?.tag), releaseNotes(pins), current.declared.release ?? [], { date })
       : null;
-    return ['done', { pr: landed.pr, merge: landed.merge, release, note: landed.note ?? null }];
+    return ['done', { pr: landed.pr, merge: landed.merge, release: tag, note: landed.note ?? null }];
   }
 }

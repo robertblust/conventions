@@ -224,3 +224,16 @@ test('under all, a member that moved only its conventions pin is not released', 
   const site = member.calls.find((c) => c.repo === 'o/site');
   assert.deepEqual([...site.pins].sort(), ['o/meta@v2.0.0', 'o/other@v1.1.0']);
 });
+
+test('a dry run says a member would re-pin an upstream it only released in the dry run', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const calls = [];
+  const member = {
+    update(repo, pins) { calls.push(`update ${repo}`); return { pr: null, merge: null }; },
+    release(repo, tag) { calls.push(`release ${repo} ${tag}`); return { tag: null }; },
+  };
+  const record = orchestrate({ report, selection: [pinChain(report, 'o/server')], github, member, date: '2026-09-28', dryRun: true });
+  assert.deepEqual(calls, ['update o/server', 'release o/server v1.1.0']);
+  assert.deepEqual(record.map((r) => `${r.repo} ${r.status} ${r.reason ?? ''}`), ['o/server done ', 'o/site skipped would re-pin o/server once it releases']);
+});
