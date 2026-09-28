@@ -108,7 +108,10 @@ export function realMember({
     throw new Blocked('no user.email in this clone, so nothing is committed under an address nobody chose');
   }
 
-  const existingPr = (repo, branch) => JSON.parse(gh(['pr', 'list', '--repo', repo, '--head', branch, '--state', 'all', '--json', 'number,state,url,mergeCommit']))[0] ?? null;
+  // A fork may push a branch of the same name, and GitHub lists its pull request beside the
+  // repository's own, so only a pull request from the repository itself is the run's.
+  const existingPr = (repo, branch) => JSON.parse(gh(['pr', 'list', '--repo', repo, '--head', branch, '--state', 'all', '--json', 'number,state,url,mergeCommit,isCrossRepository']))
+    .find((p) => !p.isCrossRepository) ?? null;
 
   function chooseBranch(repo, base) {
     for (let i = 1; ; i++) {

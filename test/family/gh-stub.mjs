@@ -16,12 +16,25 @@ const repo = opt('--repo');
 const bare = (r) => join(process.env.FAMILY_REMOTE, `${r}.git`);
 const git = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' }).trim();
 const pr = () => state.prs.find((p) => p.repo === repo && p.number === Number(args[2]));
-const view = (p) => ({ number: p.number, state: p.state, url: p.url, mergeCommit: p.merge ? { oid: p.merge } : null, mergeStateStatus: 'CLEAN' });
+const view = (p) => ({ number: p.number, state: p.state, url: p.url, mergeCommit: p.merge ? { oid: p.merge } : null, mergeStateStatus: 'CLEAN', isCrossRepository: false });
+// GH_STUB_FORK_PRS="repo:head,…" plants an open pull request from a fork on that head, listed
+// first, the way GitHub lists a fork's branch of the same name beside the repository's own.
+const forkPrs = (head) => (process.env.GH_STUB_FORK_PRS ?? '').split(',').filter((e) => e === `${repo}:${head}`)
+  .map(() => ({ number: 900, state: 'OPEN', url: `https://github.com/${repo}/pull/900`, mergeCommit: null, mergeStateStatus: 'CLEAN', isCrossRepository: true }));
+// GH_STUB_API is a JSON object from an API path to its answer; a null answer is a 404.
+const api = process.env.GH_STUB_API ? JSON.parse(process.env.GH_STUB_API) : {};
 const listed = (name) => (process.env[name] ?? '').split(',').includes(repo);
 const [a, b] = args;
 
-if (a === 'pr' && b === 'list') {
-  console.log(JSON.stringify(state.prs.filter((p) => p.repo === repo && p.head === opt('--head')).map(view)));
+if (a === 'api' && Object.hasOwn(api, args[args.length - 1])) {
+  const answer = api[args[args.length - 1]];
+  if (answer === null) {
+    console.error('gh: Not Found (HTTP 404)');
+    process.exit(1);
+  }
+  console.log(typeof answer === 'string' ? answer : JSON.stringify(answer));
+} else if (a === 'pr' && b === 'list') {
+  console.log(JSON.stringify([...forkPrs(opt('--head')), ...state.prs.filter((p) => p.repo === repo && p.head === opt('--head')).map(view)]));
 } else if (a === 'pr' && b === 'create') {
   const number = state.prs.length + 1;
   const url = `https://github.com/${repo}/pull/${number}`;

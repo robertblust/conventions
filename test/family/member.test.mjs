@@ -23,7 +23,7 @@ function setup({ email = 'test@example.com' } = {}) {
   writeFileSync(gitconfig, email ? `[user]\n\temail = ${email}\n\tname = Test\n` : '');
   Object.assign(process.env, {
     PATH: `${dirs.bin}:${process.env.PATH}`, GH_STUB_DIR: dirs.stub, FAMILY_REMOTE: dirs.remote, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1',
-    GH_STUB_FAIL_CHECKS: '', GH_STUB_LATE_CHECKS: '', GH_STUB_CLOSE: '',
+    GH_STUB_FAIL_CHECKS: '', GH_STUB_LATE_CHECKS: '', GH_STUB_CLOSE: '', GH_STUB_FORK_PRS: '', GH_STUB_API: '', GH_STUB_AFTER_MERGE: '',
   });
   return dirs;
 }
@@ -214,4 +214,16 @@ test('a release whose bump is already on main tags without opening a PR', () => 
   assert.doesNotMatch(calls(d), /pr create/);
   const state = JSON.parse(readFileSync(join(d.stub, 'state.json'), 'utf8'));
   assert.deepEqual(state.releases.map((r) => [r.tag, r.target]), [['v0.2.0', git(bare, 'rev-parse', 'main')]]);
+});
+
+test('a fork\'s pull request on the same branch name is neither reused nor merged', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', siteFiles);
+  process.env.GH_STUB_FORK_PRS = 'o/site:resync-2026-09-28';
+  const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  assert.equal(out.pr, 'https://github.com/o/site/pull/1');
+  assert.match(calls(d), /pr create --repo o\/site --head resync-2026-09-28 /);
+  assert.match(calls(d), /pr merge 1 --repo o\/site --merge/);
+  assert.doesNotMatch(calls(d), /pr (merge|view|checks) 900/);
+  assert.match(git(bare, 'show', 'main:source.json'), new RegExp(B));
 });

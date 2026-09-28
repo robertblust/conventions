@@ -23,7 +23,7 @@ export function realGithub() {
       return { aheadBy: c.ahead_by, shas: c.commits.map((x) => x.sha), files: (c.files ?? []).map((f) => f.filename) };
     },
     pullHeads(repo, sha) {
-      return (json(`repos/${repo}/commits/${sha}/pulls`) ?? []).map((p) => p.head.ref);
+      return (json(`repos/${repo}/commits/${sha}/pulls`) ?? []).filter((p) => p.head.repo?.full_name === repo).map((p) => p.head.ref);
     },
   };
 }
