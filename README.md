@@ -116,6 +116,14 @@ The repository mirrors what it vendors. The shared files sit under `conventions/
 
 A tag and a GitHub Release with notes in the prose register: what changed, what breaks, how to take it. Any change to a vendored file is at least a minor release, because it makes every copy stale. A change to the block's shape or the script's commands is a major. Before tagging, set the version in the first line of `AGENTS.md` to the new tag, and set `CONVENTIONS_RELEASE` in `.github/workflows/check.yml` to the same tag; a test fails when the two disagree. `REPOSITORIES.md` lists the members in the order to re-sync them.
 
+## Keeping the family in step
+
+`node family/report.mjs` reads every member's pins from GitHub — the members from the table in `conventions/REPOSITORIES.md`, and from each member's `main` its `pins.json` and the files a pin can sit in — and sets each against what its upstream offers: the latest release for a tag, the head of `main` for a commit. It writes `dist/resync-<date>.md` for a reader and `dist/resync-<date>.json` for the run, overwrites both when it runs again the same day, and changes nothing else. It needs `gh` with read access to the three organizations.
+
+`node family/resync.mjs dist/resync-<date>.json all`, or chain numbers from the report in place of `all`, moves the chosen chains level by level: one pull request per member, merged once its required check passes, and a minor release wherever a later level takes the member by tag. It blocks a member rather than guess, holds what is downstream of it, and writes `dist/resync-run-<date>.md`. A member whose `main` already holds its moved pins is left as it is, and a member that a run merged but did not release is offered again in the next report as a chain of its own. `--dry-run` stops each member at its local commit, on its own `dry-run-<date>` branch, so a later real run starts clean. `conventions/WORKING.md` says why the run may merge on its own. The `family-report` and `family-resync` skills in `.claude/skills/` are how an agent runs the two.
+
+A member joins by adding `pins.json`, as `conventions/PINS.md` describes. Until it does, the report shows its pins as unmanaged and the run leaves it alone.
+
 ## Tests
 
 `sh test/run.sh` runs the scripts against temporary members with this checkout as the source. `sh conventions/conventions-check` and `sh conventions/conventions-format` run over this checkout itself. The prose check leaves out `docs/superpowers/`, because a spec or plan quotes the list it scans for, and the form does not; both leave out `.superpowers/`, tooling scratch that is not prose. CI runs all three, and `shellcheck` over the shell.
