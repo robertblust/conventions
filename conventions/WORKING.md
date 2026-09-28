@@ -40,6 +40,8 @@ A release is a tag and a GitHub Release with notes in the prose register: what c
 
 Everything one repository takes from another is pinned by a visible line in the taking repository, in whatever form its tooling gives it — a tag in a package file, a commit in a source file, a release in a vendoring manifest. Pins are editorial. They move when the owner decides they move, in a commit that says why, and no bot proposes them; a pin that is behind is intent until the owner says it is drift.
 
+What is taken decides the form of the pin. Code or rules the taking repository runs or is checked against are pinned by tag, because the release is what carries the notes and the minor or major an update depends on: a parser, a design system, a schema vendored as `core/`, these files. Content it draws or serves is pinned by commit, because content changes with every edit and promises nothing a release could state, and the pin only chooses which state is shown: a mental model on a site or behind an MCP host, an OpenAPI file on a page. One repository can be taken both ways, and meta-model is: companygraph.io runs its parser at a tag and draws its `example/` and `core/` at a commit. One pin breaks the rule. The Apaleo connector implements contracts that live in the engine, and the engine has no releases, so the connector pins them by commit; once the engine releases, that pin becomes a tag.
+
 A change to anything another repository vendors or builds from is at least a minor release, because it makes every copy stale. A change that asks the taking repository to do anything beyond re-syncing or re-pinning is a major. The notes say which.
 
 ## Checks
