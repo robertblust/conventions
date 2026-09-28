@@ -281,3 +281,16 @@ test('a worktree the run itself left behind when it blocked is reset on the reru
   assert.equal(out.pr, 'https://github.com/o/site/pull/1');
   assert.match(git(bare, 'show', 'main:source.json'), new RegExp(B));
 });
+
+test('an update that moves only a vendored pin lands on its own resync-vendored branch', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', { 'conventions.json': '{"repo":"robertblust/conventions","tag":"v1.34.0"}\n' });
+  const vendored = {
+    taker: 'o/site', kind: 'conventions', file: 'conventions.json', upstream: 'robertblust/conventions', pinned: ['v1.34.0'], available: 'v1.35.0', url: 'uc',
+    entry: { kind: 'conventions', file: 'conventions.json', repo: 'robertblust/conventions', move: `printf '{"repo":"robertblust/conventions","tag":"{version}"}\\n' > conventions.json` },
+  };
+  member(d).update('o/site', [vendored], { date: '2026-09-28', verify: [] });
+  assert.match(calls(d), /pr create --repo o\/site --head resync-vendored-2026-09-28 /);
+  assert.match(git(bare, 'show', 'main:conventions.json'), /v1\.35\.0/);
+  assert.equal(existsSync(join(d.git, 'o/site-resync-vendored-2026-09-28')), false);
+});

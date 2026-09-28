@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assessFamily } from '../../family/report.mjs';
 import { renderReport } from '../../family/render.mjs';
+import { releaseBlock, pendingRelease } from '../../family/assess.mjs';
 import { longDate, listed } from '../../family/words.mjs';
 import { fakeGithub } from './fake-github.mjs';
 
@@ -98,4 +99,25 @@ test('dates and lists read as the family writes them', () => {
   assert.equal(longDate('2026-09-28'), 'Sep 28, 2026');
   assert.equal(listed(['a', 'b', 'c']), 'a, b and c');
   assert.equal(listed(['a']), 'a');
+});
+
+test('a member whose main is ahead only by a vendored resync merge is not pending and not blocked', () => {
+  const github = world();
+  github.compares['robertblust/design:v2.1.0...main'] = { aheadBy: 1, shas: ['s9'], files: [] };
+  github.pulls['robertblust/design:s9'] = ['resync-vendored-2026-09-28'];
+  const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
+  const m = Object.fromEntries(r.members.map((x) => [x.repo, x]));
+  assert.equal(m['robertblust/design'].pending, false);
+  assert.equal(m['robertblust/design'].blocked, null);
+  assert.equal(releaseBlock(github, 'robertblust/design'), null);
+  assert.ok(!r.chains.some((c) => c.kind === 'release'));
+});
+
+test('a vendored and a propagating resync merge together are pending', () => {
+  const github = world();
+  github.compares['robertblust/design:v2.1.0...main'] = { aheadBy: 2, shas: ['s8', 's9'], files: [] };
+  github.pulls['robertblust/design:s8'] = ['resync-vendored-2026-09-27'];
+  github.pulls['robertblust/design:s9'] = ['resync-2026-09-28'];
+  assert.equal(pendingRelease(github, 'robertblust/design'), true);
+  assert.equal(releaseBlock(github, 'robertblust/design'), null);
 });

@@ -13,6 +13,7 @@ import { join, dirname, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { gh } from './gh.mjs';
 import { KINDS } from './pins.mjs';
+import { NON_PROPAGATING } from './graph.mjs';
 import { commitMessage, listed } from './words.mjs';
 
 export class Blocked extends Error {}
@@ -135,7 +136,7 @@ export function realMember({
   }
 
   function dryRunWorktree(repo, dir, base) {
-    const branch = base.replace(/^resync-/, 'dry-run-');
+    const branch = base.replace(/^resync-(vendored-)?/, 'dry-run-');
     const wt = join(root, `${repo}-${branch}`);
     freshWorktree(dir, wt, branch, 'origin/main');
     return { wt, branch };
@@ -306,7 +307,10 @@ export function realMember({
       if (pinsCurrent(dir, pins)) {
         return { pr: null, merge: null, note: combineNotes(cloneNote, 'the pins are already on main') };
       }
-      const { wt, branch } = prepareWorktree(repo, dir, `resync-${date}`);
+      // A merge that moves only vendored files is named apart, so a later report does not read
+      // it as work a release is owed for.
+      const vendored = pins.every((p) => NON_PROPAGATING.has(p.kind));
+      const { wt, branch } = prepareWorktree(repo, dir, vendored ? `resync-vendored-${date}` : `resync-${date}`);
       return whileIn(wt, () => {
         identity(wt);
         const ran = [];

@@ -237,3 +237,16 @@ test('a dry run says a member would re-pin an upstream it only released in the d
   assert.deepEqual(calls, ['update o/server', 'release o/server v1.1.0']);
   assert.deepEqual(record.map((r) => `${r.repo} ${r.status} ${r.reason ?? ''}`), ['o/server done ', 'o/site skipped would re-pin o/server once it releases']);
 });
+
+test('a member that moved only its conventions pin still finishes a release an earlier run left undone', () => {
+  const github = withConventions(world());
+  github.files['o/server']['package.json'] = '{"m":"github:o/meta#v2.0.0"}';
+  github.compares['o/server:v1.0.0...main'] = { aheadBy: 1, shas: ['s1'], files: [] };
+  github.pulls['o/server:s1'] = ['resync-2026-09-27'];
+  const report = assessFamily({ github, members: withConv, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  const record = orchestrate({ report, selection: 'all', github, member, date: '2026-09-28' });
+  assert.deepEqual(member.calls.filter((c) => c.repo === 'o/server').map((c) => `${c.op} ${c.pins?.join(',') ?? c.tag}`), [`update ${CONV}@v1.35.0`, 'release v1.1.0']);
+  assert.equal(record.find((r) => r.repo === 'o/server').release, 'v1.1.0');
+  assert.ok(member.calls.find((c) => c.repo === 'o/site').pins.includes('o/server@v1.1.0'));
+});

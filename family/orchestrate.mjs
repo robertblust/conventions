@@ -4,7 +4,8 @@
 // decided from declared pins alone, so an upstream one takes in a file its pins.json does not
 // name never causes a release; and a member whose pins already moved but whose own release the
 // last run left undone is released again here rather than skipped as having nothing to move. A
-// member that moved only its conventions or service-conventions pin is not released.
+// member that moved only its conventions or service-conventions pin is not released for that
+// move, though a release an earlier run left undone is still finished.
 import { readMember, assessPins, releaseBlock, pendingRelease } from './assess.mjs';
 import { releasesIn, edgesOf, NON_PROPAGATING } from './graph.mjs';
 import { pinKey } from './pins.mjs';
@@ -82,9 +83,16 @@ export function orchestrate({ report, selection, github, member, date, dryRun = 
     if (unreleased) return ['blocked', { reason: unreleased }];
     const landed = member.update(repo, pins, { date, verify: current.declared.verify ?? [] });
     landedWith(landed);
-    const tag = releases
-      ? release(repo, nextMinor(github.latestRelease(repo)?.tag), releaseNotes(pins), current.declared.release ?? [], { date })
-      : null;
+    let tag = null;
+    if (releases) {
+      tag = release(repo, nextMinor(github.latestRelease(repo)?.tag), releaseNotes(pins), current.declared.release ?? [], { date });
+    } else if (releasing && pendingRelease(github, repo)) {
+      // Only vendored pins moved, but an earlier run left a release undone that a later level
+      // of this run takes, so it is finished here as on the pending path.
+      const blocked = releaseBlock(github, repo);
+      if (blocked) return ['blocked', { reason: blocked, pr: landed.pr, merge: landed.merge }];
+      tag = release(repo, nextMinor(github.latestRelease(repo)?.tag), pendingNotes(), current.declared.release ?? [], { date });
+    }
     return ['done', { pr: landed.pr, merge: landed.merge, release: tag, note: landed.note ?? null }];
   }
 }

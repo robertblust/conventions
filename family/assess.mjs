@@ -98,12 +98,15 @@ export function releaseBlock(github, repo) {
 }
 
 // True when a member's main is ahead of its latest release only by commits the run itself made
-// (their pull request's head starts `resync-`), so a rerun can finish the release the first run
-// left undone instead of finding nothing behind and no chain to offer it in.
+// (their pull request's head starts `resync-`), and at least one of them moved more than vendored
+// files, so a rerun can finish the release the first run left undone instead of finding nothing
+// behind and no chain to offer it in. A `resync-vendored-` merge alone is owed no release.
 export function pendingRelease(github, repo) {
   const rel = github.latestRelease(repo);
   if (!rel) return false;
   const c = github.compare(repo, rel.tag, 'main');
   if (c.aheadBy <= 0) return false;
-  return c.shas.every((sha) => github.pullHeads(repo, sha).some((h) => h.startsWith('resync-')));
+  const heads = c.shas.map((sha) => github.pullHeads(repo, sha));
+  if (!heads.every((hs) => hs.some((h) => h.startsWith('resync-')))) return false;
+  return heads.some((hs) => hs.some((h) => h.startsWith('resync-') && !h.startsWith('resync-vendored-')));
 }
