@@ -172,7 +172,7 @@ test('an unknown chain number throws', () => {
 test('a commit message says what the member takes and what ran', () => {
   const m = commitMessage([{ upstream: 'o/meta', file: 'package.json', pinned: ['v1.0.0'], available: 'v2.0.0', url: 'um' }], ['npm install', 'npm test']);
   assert.equal(m.subject, 'Takes meta v2.0.0');
-  assert.equal(m.full, 'Takes meta v2.0.0\n\nThe family resync moves o/meta in `package.json` from v1.0.0 to v2.0.0. The upstream notes are at um.\n\nVerified: `npm install` and `npm test` passed.\n');
+  assert.equal(m.full, 'Takes meta v2.0.0\n\nThe family resync moves o/meta in `package.json` from v1.0.0 to v2.0.0. The upstream notes are at um.\n\nVerified: `npm install` and `npm test` passed.\n\nProcess: Delivery\nPhase: Implement\nTrack: Code\n');
 });
 
 test('a read GitHub fails for one member blocks that member, holds its downstream and lets the rest go on', () => {
@@ -266,4 +266,17 @@ test('a member whose main holds only re-sync-only commits is still released when
     'update o/site o/server@v1.1.0',
   ]);
   assert.deepEqual(record.map((r) => `${r.repo} ${r.status}`), ['o/server done', 'o/site done']);
+});
+
+test('a note from a release bump reaches the run record once, beside the update\'s', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const chain = report.chains.find((c) => c.taker === 'o/server').n;
+  const member = fakeMember(github);
+  const personal = 'no clone of o/mental-model, so the commits carry the person\'s name';
+  const { update, release } = member;
+  member.update = (...a) => ({ ...update(...a), note: personal });
+  member.release = (...a) => ({ ...release(...a), note: personal });
+  const record = orchestrate({ report, selection: [chain], github, member, date: '2026-09-28' });
+  assert.equal(record.find((r) => r.repo === 'o/server').note, personal);
 });

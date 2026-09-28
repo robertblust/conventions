@@ -14,9 +14,47 @@ import { homedir } from 'node:os';
 import { gh } from './gh.mjs';
 import { KINDS } from './pins.mjs';
 import { NON_PROPAGATING } from './graph.mjs';
-import { commitMessage, listed } from './words.mjs';
+import { commitMessage, listed, TRAILERS } from './words.mjs';
+import { localPathOf } from './repositories.mjs';
 
 export class Blocked extends Error {}
+
+// The host an identity's url names, without `www.`, as the seat check in meta-model reads it.
+const domainOf = (url) => {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, '') || null;
+  } catch {
+    return null;
+  }
+};
+const identityUrl = (instance) => {
+  const path = join(instance, 'model/identity.md');
+  if (!existsSync(path)) return null;
+  const front = readFileSync(path, 'utf8').match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  return front?.[1].match(/^url:\s*(\S+)\s*$/m)?.[1] ?? null;
+};
+
+// Who a resync commit is authored by. A re-pin, a re-sync and a release bump are the
+// Implementer's, at the domain of the governing instance's identity url; the governing instance
+// is found as conventions/hooks/commit-msg finds it, the member itself where it is one and
+// otherwise its organization's mental-model at the local path the member's REPOSITORIES.md
+// gives. Where that clone is missing the commit keeps the person's own name, and the note says so.
+export function implementerOf(wt, repo) {
+  let instance = wt;
+  if (!existsSync(join(wt, '.companygraph/manifest.json'))) {
+    const governing = `${repo.split('/')[0]}/mental-model`;
+    const list = join(wt, 'conventions/REPOSITORIES.md');
+    let path = existsSync(list) ? localPathOf(readFileSync(list, 'utf8'), governing) : null;
+    if (path?.startsWith('~/')) path = join(homedir(), path.slice(2));
+    if (!path || !existsSync(join(path, '.companygraph/manifest.json'))) {
+      return { author: null, note: `no clone of ${governing}${path ? ` at ${path}` : ''}, so the commits carry the person's name` };
+    }
+    instance = path;
+  }
+  const domain = domainOf(identityUrl(instance) ?? '');
+  if (!domain) return { author: null, note: `no identity url in ${instance}, so the commits carry the person's name` };
+  return { author: `Implementer <implementer@${domain}>`, note: null };
+}
 
 const CHECK_LINE = /(robertblust\/conventions\/\.github\/workflows\/check\.yml@)[^\s'"]+/g;
 
@@ -233,9 +271,9 @@ export function realMember({
 
   const hasNewCommit = (wt) => git(wt, 'rev-list', '--count', 'origin/main..HEAD') !== '0';
 
-  function commitIfChanged(wt, message) {
+  function commitIfChanged(wt, message, author) {
     const changed = stage(wt);
-    if (changed) git(wt, 'commit', '-q', '-m', message.full);
+    if (changed) git(wt, 'commit', '-q', ...(author ? ['--author', author] : []), '-m', message.full);
     return changed || hasNewCommit(wt);
   }
 
@@ -255,8 +293,8 @@ export function realMember({
     return landed;
   }
 
-  function land(repo, dir, wt, branch, message) {
-    if (!commitIfChanged(wt, message)) throw new Blocked('the move changed nothing');
+  function land(repo, dir, wt, branch, message, author) {
+    if (!commitIfChanged(wt, message, author)) throw new Blocked('the move changed nothing');
     return pushAndMerge(repo, dir, wt, branch, message);
   }
 
@@ -299,7 +337,7 @@ export function realMember({
     });
   }
 
-  const combineNotes = (cloneNote, extra) => (cloneNote ? `${cloneNote}; ${extra}` : extra);
+  const combineNotes = (...notes) => notes.filter(Boolean).join('; ') || null;
 
   return {
     update(repo, pins, { date, verify = [] }) {
@@ -313,10 +351,11 @@ export function realMember({
       const { wt, branch } = prepareWorktree(repo, dir, vendored ? `resync-vendored-${date}` : `resync-${date}`);
       return whileIn(wt, () => {
         identity(wt);
+        const seat = implementerOf(wt, repo);
         const ran = [];
         for (const p of pins) move(wt, p, ran);
         for (const cmd of verify) { sh(wt, cmd); ran.push(cmd); }
-        return { ...land(repo, dir, wt, branch, commitMessage(pins, ran)), note: cloneNote };
+        return { ...land(repo, dir, wt, branch, commitMessage(pins, ran), seat.author), note: combineNotes(cloneNote, seat.note) };
       });
     },
 
@@ -334,11 +373,14 @@ export function realMember({
       // checks are done: the merge of the bump's own pull request, or else the main the run just
       // fetched and found the bump already on.
       let target = null;
+      let note = null;
       if (commands.length) {
         const { dir } = clone(repo);
         const { wt, branch } = prepareWorktree(repo, dir, `resync-${date}-release`);
         target = whileIn(wt, () => {
           identity(wt);
+          const seat = implementerOf(wt, repo);
+          note = seat.note;
           const bump = () => {
             const ran = [];
             for (const c of commands) { const cmd = c.replaceAll('{version}', version); sh(wt, cmd); ran.push(cmd); }
@@ -347,8 +389,8 @@ export function realMember({
           const ran = bump();
           const subject = `The version reads ${version}`;
           const body = `The family resync releases ${tag} so that the repositories taking this one can re-pin it.\n\nVerified: ${ran.length ? `${listed(ran.map((c) => `\`${c}\``))} passed` : 'the bump was already committed'}.`;
-          const message = { subject, body, full: `${subject}\n\n${body}\n` };
-          if (commitIfChanged(wt, message)) {
+          const message = { subject, body, full: `${subject}\n\n${body}\n\n${TRAILERS}\n` };
+          if (commitIfChanged(wt, message, seat.author)) {
             return pushAndMerge(repo, dir, wt, branch, message).merge;
           } else {
             const main = git(wt, 'rev-parse', 'origin/main');
@@ -364,11 +406,11 @@ export function realMember({
       }
       if (dryRun) {
         log(`dry run: ${repo}: would release ${tag}`);
-        return { tag: null };
+        return { tag: null, note };
       }
       if (!target) target = git(clone(repo).dir, 'rev-parse', 'origin/main');
       gh(['release', 'create', tag, '--repo', repo, '--target', target, '--title', tag, '--notes', notes]);
-      return { tag };
+      return { tag, note };
     },
   };
 }

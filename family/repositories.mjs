@@ -28,3 +28,13 @@ export function parseDrawing(markdown) {
   for (const [from, to] of edges) for (const a of ids(from)) for (const b of ids(to)) pairs.add(`${repoOf[a]}>${repoOf[b]}`);
   return pairs;
 }
+
+// The local path the table gives a repository, its last column, as conventions/hooks/commit-msg
+// reads it; null where the table has no row for it.
+export function localPathOf(markdown, repo) {
+  for (const line of markdown.split('\n')) {
+    const cells = line.split('|').map((c) => c.trim());
+    if (cells[1] === repo && cells.length > 3) return cells[cells.length - 2] || null;
+  }
+  return null;
+}

@@ -13,12 +13,16 @@ export const longDate = (iso) => {
 
 const moves = (pins) => listed(pins.map((p) => `${p.upstream} in \`${p.file}\` from ${p.pinned.map(shortV).join(', ')} to ${shortV(p.available)}`));
 
+// The trailers of every commit a resync run makes: a re-pin, a re-sync and a release bump are
+// the Implementer's work in the Implement phase of Delivery, on its Code track.
+export const TRAILERS = 'Process: Delivery\nPhase: Implement\nTrack: Code';
+
 export function commitMessage(pins, ran) {
   const subject = `Takes ${listed([...new Set(pins.map((p) => `${p.upstream.split('/')[1]} ${shortV(p.available)}`))])}`;
   const notes = [...new Set(pins.map((p) => p.url).filter(Boolean))];
   const body = `The family resync moves ${moves(pins)}.${notes.length ? ` The upstream notes are at ${listed(notes)}.` : ''}`;
   const verified = ran.length ? `Verified: ${listed(ran.map((c) => `\`${c}\``))} passed.` : 'Verified: the move needed no command.';
-  return { subject, body: `${body}\n\n${verified}`, full: `${subject}\n\n${body}\n\n${verified}\n` };
+  return { subject, body: `${body}\n\n${verified}`, full: `${subject}\n\n${body}\n\n${verified}\n\n${TRAILERS}\n` };
 }
 
 export function releaseNotes(pins) {
