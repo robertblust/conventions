@@ -313,6 +313,24 @@ export function realMember({
     for (const cmd of p.entry.after ?? []) { sh(wt, cmd); ran.push(cmd); }
   }
 
+  // A move that never touches an npm-tag pin leaves a worktree with no node_modules, and a
+  // verify command that needs one fails before it says anything about what it verifies. Where a
+  // lockfile sits and no node_modules answers it, `npm ci` runs once, at the worktree root and at
+  // every directory a verify command names with `--prefix`; where node_modules is already there —
+  // an npm-tag pin's own `npm install` left it — nothing runs twice.
+  function installForVerify(wt, verify, ran) {
+    const install = (dir) => {
+      const base = dir === '.' ? wt : join(wt, dir);
+      if (!existsSync(join(base, 'package-lock.json')) || existsSync(join(base, 'node_modules'))) return;
+      const cmd = dir === '.' ? 'npm ci' : `npm ci --prefix ${dir}`;
+      sh(wt, cmd);
+      ran.push(cmd);
+    };
+    install('.');
+    const dirs = [...new Set([...verify.join(' ').matchAll(/--prefix[= ]+(\S+)/g)].map((m) => m[1]))];
+    for (const dir of dirs) install(dir);
+  }
+
   function rewriteWorkflows(wt, tag) {
     const dir = join(wt, '.github/workflows');
     if (!existsSync(dir)) return;
@@ -354,6 +372,7 @@ export function realMember({
         const seat = implementerOf(wt, repo);
         const ran = [];
         for (const p of pins) move(wt, p, ran);
+        installForVerify(wt, verify, ran);
         for (const cmd of verify) { sh(wt, cmd); ran.push(cmd); }
         return { ...land(repo, dir, wt, branch, commitMessage(pins, ran), seat.author), note: combineNotes(cloneNote, seat.note) };
       });
