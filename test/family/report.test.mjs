@@ -55,6 +55,21 @@ test('the Markdown opens with the counts and has one table per level', () => {
   assert.ok(md.endsWith('\n') && !md.endsWith('\n\n'));
 });
 
+test('a member whose main only holds resync work gets a pending release chain', () => {
+  const github = world();
+  github.compares['robertblust/design:v2.1.0...main'] = { aheadBy: 1, shas: ['s9'], files: [] };
+  github.pulls['robertblust/design:s9'] = ['resync-2026-09-28'];
+  const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
+  const m = Object.fromEntries(r.members.map((x) => [x.repo, x]));
+  assert.equal(m['robertblust/design'].pending, true);
+  assert.equal(m['robertblust/design'].blocked, null);
+  assert.equal(m['robertblust/conventions'].pending, false);
+  const chain = r.chains.find((c) => c.kind === 'release' && c.taker === 'robertblust/design');
+  assert.ok(chain);
+  const md = renderReport(r);
+  assert.match(md, /has unreleased resync work/);
+});
+
 test('dates and lists read as the family writes them', () => {
   assert.equal(longDate('2026-09-28'), 'Sep 28, 2026');
   assert.equal(listed(['a', 'b', 'c']), 'a, b and c');

@@ -25,3 +25,5 @@ export function releaseNotes(pins) {
   const notes = [...new Set(pins.map((p) => p.url).filter(Boolean))];
   return `This release takes newer pins and changes nothing else: ${moves(pins)}.${notes.length ? ` Their notes are at ${listed(notes)}.` : ''}\n\nNothing breaks. A repository that takes this one re-pins it and changes nothing else.\n`;
 }
+
+export const pendingNotes = () => 'This release carries pins the family resync already merged and changes nothing else.\n\nNothing breaks. A repository that takes this one re-pins it and changes nothing else.\n';

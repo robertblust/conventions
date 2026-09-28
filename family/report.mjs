@@ -6,8 +6,8 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { parseMembers, parseDrawing } from './repositories.mjs';
-import { readMember, assessPins, releaseBlock } from './assess.mjs';
-import { edgesOf, levelsOf, chainsOf, CONVENTIONS, TAG_KINDS } from './graph.mjs';
+import { readMember, assessPins, releaseBlock, pendingRelease } from './assess.mjs';
+import { edgesOf, levelsOf, chainsOf, stepsOf, CONVENTIONS, TAG_KINDS } from './graph.mjs';
 import { renderReport } from './render.mjs';
 import { realGithub } from './github.mjs';
 
@@ -45,12 +45,25 @@ export function assessFamily({ github, members, drawing, date }) {
     if (e.to !== CONVENTIONS && !drawing.has(`${e.from}>${e.to}`)) problems.push({ type: 'undrawn', repo: e.from, text: `pins ${e.to}, which the drawing in REPOSITORIES.md does not show` });
   }
   for (const p of pins) if (p.status === 'outside') problems.push({ type: 'outside', repo: p.taker, text: `pins ${p.upstream} in ${p.file}, which is not in the family` });
+  // A member a later level takes by tag whose main holds only the run's own resync commits still
+  // ahead of its last release has a release a rerun can finish, though nothing in it is behind.
+  const pending = new Set();
+  for (const r of takenByTag) {
+    if (blocked.has(r) || !managed.has(r)) continue;
+    if (pendingRelease(github, r)) pending.add(r);
+  }
+  const chains = chainsOf(pins, edges, level);
+  let n = chains.length;
+  for (const repo of [...pending].sort()) {
+    n += 1;
+    chains.push({ n, taker: repo, kind: 'release', file: null, upstream: repo, available: 'unreleased', steps: stepsOf(repo, edges, level) });
+  }
   return {
     date,
-    members: repos.map((repo) => ({ repo, level: level.get(repo) ?? null, managed: managed.get(repo) ?? false, blocked: blocked.get(repo) ?? null })),
+    members: repos.map((repo) => ({ repo, level: level.get(repo) ?? null, managed: managed.get(repo) ?? false, blocked: blocked.get(repo) ?? null, pending: pending.has(repo) })),
     pins,
     edges,
-    chains: chainsOf(pins, edges, level),
+    chains,
     problems,
   };
 }

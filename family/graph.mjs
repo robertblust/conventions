@@ -57,21 +57,22 @@ export function downstreamOf(repo, edges) {
   return out;
 }
 
+export function stepsOf(repo, edges, level) {
+  const byLevel = new Map();
+  for (const r of [repo, ...downstreamOf(repo, edges)]) {
+    const l = level.get(r);
+    if (l === null || l === undefined) continue;
+    byLevel.set(l, [...(byLevel.get(l) ?? []), r]);
+  }
+  return [...byLevel.keys()].sort((a, b) => a - b).map((l) => byLevel.get(l).sort());
+}
+
 export function chainsOf(pins, edges, level) {
   const rank = (p) => level.get(p.taker) ?? Infinity;
   return pins
     .filter((p) => p.status === 'behind')
     .sort((a, b) => rank(a) - rank(b) || a.taker.localeCompare(b.taker) || a.upstream.localeCompare(b.upstream))
-    .map((p, i) => {
-      const byLevel = new Map();
-      for (const r of [p.taker, ...downstreamOf(p.taker, edges)]) {
-        const l = level.get(r);
-        if (l === null || l === undefined) continue;
-        byLevel.set(l, [...(byLevel.get(l) ?? []), r]);
-      }
-      const steps = [...byLevel.keys()].sort((a, b) => a - b).map((l) => byLevel.get(l).sort());
-      return { n: i + 1, taker: p.taker, kind: p.kind, file: p.file, upstream: p.upstream, available: p.available, steps };
-    });
+    .map((p, i) => ({ n: i + 1, taker: p.taker, kind: p.kind, file: p.file, upstream: p.upstream, available: p.available, steps: stepsOf(p.taker, edges, level) }));
 }
 
 export function releasesIn(repo, closure, edges) {

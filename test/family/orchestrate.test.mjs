@@ -6,6 +6,9 @@ import { KINDS } from '../../family/pins.mjs';
 import { commitMessage } from '../../family/words.mjs';
 import { fakeGithub } from './fake-github.mjs';
 
+const pinChain = (report, taker) => report.chains.find((c) => c.taker === taker && c.kind !== 'release').n;
+const releaseChain = (report, taker) => report.chains.find((c) => c.taker === taker && c.kind === 'release').n;
+
 const declare = (pins, extra = {}) => JSON.stringify({ pins, ...extra });
 const npm = (repo) => ({ kind: 'npm-tag', file: 'package.json', repo });
 
@@ -89,9 +92,81 @@ test('work on main that no release describes blocks a member before it is moved'
   assert.match(record.find((r) => r.repo === 'o/server').reason, /unreleased work on main: 2 commits since v1\.0\.0/);
 });
 
-test('the next minor resets the patch', () => {
+test('the next minor resets the patch, and refuses a tag it cannot read', () => {
   assert.equal(nextMinor('v0.55.3'), 'v0.56.0');
-  assert.equal(nextMinor(undefined), 'v0.1.0');
+  assert.throws(() => nextMinor('v2.0.0-rc1'));
+  assert.throws(() => nextMinor(undefined));
+});
+
+test('a release that throws after update keeps pr and merge in the blocked record', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const chain = pinChain(report, 'o/server');
+  const calls = [];
+  const member = {
+    calls,
+    update(repo, pins, opts) {
+      calls.push({ op: 'update', repo, pins: pins.map((p) => `${p.upstream}@${p.available}`), verify: opts.verify });
+      for (const p of pins) github.files[repo][p.file] = KINDS[p.kind].write(github.files[repo][p.file], p.upstream, p.available);
+      return { pr: 'https://github.com/o/server/pull/1', merge: 'm1' };
+    },
+    release() {
+      calls.push({ op: 'release' });
+      throw new Error('gh release create failed');
+    },
+  };
+  const record = orchestrate({ report, selection: [chain], github, member, date: '2026-09-28' });
+  const server = record.find((r) => r.repo === 'o/server');
+  assert.equal(server.status, 'blocked');
+  assert.match(server.reason, /gh release create failed/);
+  assert.equal(server.pr, 'https://github.com/o/server/pull/1');
+  assert.equal(server.merge, 'm1');
+});
+
+test('a rerun releases a member whose pin already moved, then moves the next level onto it', () => {
+  const github = world();
+  github.files['o/server']['package.json'] = '{"m":"github:o/meta#v2.0.0"}';
+  github.compares['o/server:v1.0.0...main'] = { aheadBy: 1, shas: ['s1'], files: [] };
+  github.pulls['o/server:s1'] = ['resync-2026-09-28'];
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const chain = releaseChain(report, 'o/server');
+  const member = fakeMember(github);
+  const record = orchestrate({ report, selection: [chain], github, member, date: '2026-09-28' });
+  assert.deepEqual(member.calls.map((c) => `${c.op} ${c.repo} ${c.pins?.join(',') ?? c.tag}`), [
+    'release o/server v1.1.0',
+    'update o/site o/server@v1.1.0',
+  ]);
+  assert.deepEqual(record.map((r) => `${r.repo} ${r.status}`), ['o/server done', 'o/site done']);
+});
+
+test('an undeclared pin does not cause a release', () => {
+  const github = world();
+  github.files['o/site']['pins.json'] = declare([npm('o/meta'), npm('o/other')]);
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const chain = pinChain(report, 'o/server');
+  const member = fakeMember(github);
+  const record = orchestrate({ report, selection: [chain], github, member, date: '2026-09-28' });
+  assert.equal(member.calls.filter((c) => c.op === 'release').length, 0);
+  assert.deepEqual(record.map((r) => `${r.repo} ${r.status}`), ['o/server done', 'o/site skipped']);
+});
+
+test('a member without pins.json holds its downstream', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const chain = pinChain(report, 'o/server');
+  delete github.files['o/server']['pins.json'];
+  const member = fakeMember(github);
+  const record = orchestrate({ report, selection: [chain], github, member, date: '2026-09-28' });
+  assert.deepEqual(record.map((r) => `${r.repo} ${r.status}`), ['o/server unmanaged', 'o/site held']);
+  assert.equal(record[0].reason, 'no pins.json');
+  assert.match(record[1].reason, /waits on o\/server/);
+});
+
+test('an unknown chain number throws', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  assert.throws(() => orchestrate({ report, selection: [9999], github, member, date: '2026-09-28' }), /no chain 9999 in the report/);
 });
 
 test('a commit message says what the member takes and what ran', () => {

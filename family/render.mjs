@@ -34,7 +34,10 @@ export function renderReport(data) {
   }
   lines.push('## Chains', '');
   if (!data.chains.length) lines.push('Nothing is behind.');
-  for (const c of data.chains) lines.push(`${c.n}. ${c.upstream} ${shortV(c.available)} → ${c.steps.map((s) => s.join(', ')).join(' → ')}`);
+  for (const c of data.chains) {
+    const head = c.kind === 'release' ? `${c.taker} has unreleased resync work` : `${c.upstream} ${shortV(c.available)}`;
+    lines.push(`${c.n}. ${head} → ${c.steps.map((s) => s.join(', ')).join(' → ')}`);
+  }
   lines.push('');
   if (data.problems.length) {
     lines.push('## What disagrees', '');
