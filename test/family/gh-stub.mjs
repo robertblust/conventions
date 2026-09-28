@@ -62,6 +62,13 @@ if (a === 'api' && Object.hasOwn(api, args[args.length - 1])) {
   p.state = 'MERGED';
   p.merge = git(work, 'rev-parse', 'HEAD');
   save();
+  if (listed('GH_STUB_AFTER_MERGE')) {
+    // Someone merges a change of their own by hand right after the run's.
+    writeFileSync(join(work, 'by-hand.txt'), 'by hand\n');
+    git(work, 'add', '-A');
+    git(work, '-c', 'user.email=hand@x', '-c', 'user.name=hand', 'commit', '-q', '-m', 'A change merged by hand');
+    git(work, 'push', '-q', 'origin', 'HEAD:main');
+  }
 } else if (a === 'release' && b === 'view') {
   process.exit(state.releases.some((r) => r.repo === repo && r.tag === args[2]) ? 0 : 1);
 } else if (a === 'release' && b === 'create') {

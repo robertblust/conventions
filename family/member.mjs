@@ -276,23 +276,41 @@ export function realMember({
         }
       }
       const version = tag.replace(/^v/, '');
+      // The tag goes on a commit the run knows, never on whatever main holds by the time the
+      // checks are done: the merge of the bump's own pull request, or else the main the run just
+      // fetched and found the bump already on.
+      let target = null;
       if (commands.length) {
         const { dir } = clone(repo);
         const { wt, branch } = prepareWorktree(repo, dir, `resync-${date}-release`);
         identity(wt);
-        const ran = [];
-        for (const c of commands) { const cmd = c.replaceAll('{version}', version); sh(wt, cmd); ran.push(cmd); }
+        const bump = () => {
+          const ran = [];
+          for (const c of commands) { const cmd = c.replaceAll('{version}', version); sh(wt, cmd); ran.push(cmd); }
+          return ran;
+        };
+        const ran = bump();
         const subject = `The version reads ${version}`;
         const body = `The family resync releases ${tag} so that the repositories taking this one can re-pin it.\n\nVerified: ${ran.length ? `${listed(ran.map((c) => `\`${c}\``))} passed` : 'the bump was already committed'}.`;
         const message = { subject, body, full: `${subject}\n\n${body}\n` };
-        if (commitIfChanged(wt, message)) pushAndMerge(repo, dir, wt, branch, message);
-        else cleanup(dir, wt, branch);
+        if (commitIfChanged(wt, message)) {
+          target = pushAndMerge(repo, dir, wt, branch, message).merge;
+        } else {
+          const main = git(wt, 'rev-parse', 'origin/main');
+          if (git(wt, 'rev-parse', 'HEAD') !== main) {
+            git(wt, 'reset', '-q', '--hard', main);
+            bump();
+            if (stage(wt)) throw new Blocked(`the bump to ${version} is not on main`);
+          }
+          target = main;
+          cleanup(dir, wt, branch);
+        }
       }
       if (dryRun) {
         log(`dry run: ${repo}: would release ${tag}`);
         return { tag: null };
       }
-      const target = JSON.parse(gh(['api', `repos/${repo}/commits/main`])).sha;
+      if (!target) target = git(clone(repo).dir, 'rev-parse', 'origin/main');
       gh(['release', 'create', tag, '--repo', repo, '--target', target, '--title', tag, '--notes', notes]);
       return { tag };
     },

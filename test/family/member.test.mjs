@@ -227,3 +227,14 @@ test('a fork\'s pull request on the same branch name is neither reused nor merge
   assert.doesNotMatch(calls(d), /pr (merge|view|checks) 900/);
   assert.match(git(bare, 'show', 'main:source.json'), new RegExp(B));
 });
+
+test('a release tags the merge of its own bump, not a change merged by hand after it', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/server', { VERSION: '0.1.0\n' });
+  process.env.GH_STUB_AFTER_MERGE = 'o/server';
+  member(d).release('o/server', 'v0.2.0', 'Notes.\n', ['printf "{version}\\n" > VERSION'], { date: '2026-09-28' });
+  const state = JSON.parse(readFileSync(join(d.stub, 'state.json'), 'utf8'));
+  assert.equal(git(bare, 'show', 'main:by-hand.txt'), 'by hand');
+  assert.equal(state.releases[0].target, state.prs[0].merge);
+  assert.notEqual(state.releases[0].target, git(bare, 'rev-parse', 'main'));
+});
