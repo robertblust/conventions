@@ -496,6 +496,31 @@ EOF
   if echo "$out" | grep -q 'no .markdownlint-cli2.jsonc'; then ok "a member without the rules is told to sync"; else bad "missing rules were not reported: $out"; fi
 fi
 
+# The drawing of what pins what covers the table: every repository listed is a node, named
+# organization/label by the subgraph it sits in, or is named in the paragraph after the drawing.
+undrawn() {
+  awk '
+    /^\| [^ ]+\/[^ ]+ \|/ { listed[++n] = $2 }
+    /^```mermaid$/ { drawing = 1; next }
+    drawing && /^```$/ { drawing = 0; after = 1; next }
+    drawing && /^ *subgraph / { org = $2 }
+    drawing && /^ *end$/ { org = "" }
+    drawing && org != "" && match($0, /\[[^]]+\]/) { drawn[org "/" substr($0, RSTART + 1, RLENGTH - 2)] = 1 }
+    after && NF { note = $0; after = 0 }
+    END { for (i = 1; i <= n; i++) if (!(listed[i] in drawn) && index(note, "`" listed[i] "`") == 0) print listed[i] }
+  ' "$1"
+}
+missing=$(undrawn "$HERE/conventions/REPOSITORIES.md")
+if [ -z "$missing" ]; then ok "every repository in REPOSITORIES.md is drawn or named as left out"
+else bad "REPOSITORIES.md lists and neither draws nor names: $missing"
+fi
+awk '/^\| robertblust\/conventions \|/ { print; print "| robertblust/new-member | x | x | main | x |"; next } { print }' \
+  "$HERE/conventions/REPOSITORIES.md" > "$TMP/REPOSITORIES.md"
+if [ "$(undrawn "$TMP/REPOSITORIES.md")" = "robertblust/new-member" ]
+then ok "a repository added to the table and not to the drawing is reported"
+else bad "an undrawn repository was not reported: $(undrawn "$TMP/REPOSITORIES.md")"
+fi
+
 # the workflow's declared release and the marker version cannot drift apart
 workflow_release=$(sed -n 's/^ *CONVENTIONS_RELEASE: *//p' "$HERE/.github/workflows/check.yml")
 marker_version=$(sed -n '1s/.*· \(v[^ ]*\) -->.*/\1/p' "$HERE/AGENTS.md")
