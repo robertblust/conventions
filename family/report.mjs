@@ -1,0 +1,67 @@
+#!/usr/bin/env node
+// The family report: every member's pins read from GitHub and set against what each upstream
+// offers. `node family/report.mjs` writes dist/resync-<date>.md and .json and prints the path of
+// the Markdown; it writes nothing else.
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { join, dirname } from 'node:path';
+import { parseMembers, parseDrawing } from './repositories.mjs';
+import { readMember, assessPins, releaseBlock } from './assess.mjs';
+import { edgesOf, levelsOf, chainsOf, CONVENTIONS, TAG_KINDS } from './graph.mjs';
+import { renderReport } from './render.mjs';
+import { realGithub } from './github.mjs';
+
+export const HERE = dirname(dirname(fileURLToPath(import.meta.url)));
+export const today = () => new Date().toLocaleDateString('en-CA');
+
+export function assessFamily({ github, members, drawing, date }) {
+  const repos = members.map((m) => m.repo);
+  const family = new Set(repos);
+  const cache = new Map();
+  const pins = [];
+  const managed = new Map();
+  const problems = [];
+  for (const repo of repos) {
+    try {
+      const member = readMember(github, repo);
+      managed.set(repo, member.declared !== null);
+      if (member.invalid) problems.push({ type: 'invalid', repo, text: `pins.json: ${member.invalid}` });
+      pins.push(...assessPins(github, member, family, cache));
+    } catch (e) {
+      problems.push({ type: 'unreachable', repo, text: e.message });
+    }
+  }
+  const edges = edgesOf(pins);
+  const { level, cycles } = levelsOf(repos.filter((r) => managed.has(r)), edges);
+  const blocked = new Map();
+  for (const cycle of cycles) for (const r of cycle) blocked.set(r, `on a cycle: ${cycle.join(' → ')}`);
+  const takenByTag = new Set(edges.filter((e) => e.to !== CONVENTIONS && e.kinds.some((k) => TAG_KINDS.has(k))).map((e) => e.to));
+  for (const r of takenByTag) {
+    if (blocked.has(r) || !managed.has(r)) continue;
+    const reason = releaseBlock(github, r);
+    if (reason) blocked.set(r, reason);
+  }
+  for (const e of edges) {
+    if (e.to !== CONVENTIONS && !drawing.has(`${e.from}>${e.to}`)) problems.push({ type: 'undrawn', repo: e.from, text: `pins ${e.to}, which the drawing in REPOSITORIES.md does not show` });
+  }
+  for (const p of pins) if (p.status === 'outside') problems.push({ type: 'outside', repo: p.taker, text: `pins ${p.upstream} in ${p.file}, which is not in the family` });
+  return {
+    date,
+    members: repos.map((repo) => ({ repo, level: level.get(repo) ?? null, managed: managed.get(repo) ?? false, blocked: blocked.get(repo) ?? null })),
+    pins,
+    edges,
+    chains: chainsOf(pins, edges, level),
+    problems,
+  };
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const markdown = readFileSync(join(HERE, 'conventions/REPOSITORIES.md'), 'utf8');
+  const date = today();
+  const data = assessFamily({ github: realGithub(), members: parseMembers(markdown), drawing: parseDrawing(markdown), date });
+  const out = join(HERE, 'dist');
+  mkdirSync(out, { recursive: true });
+  writeFileSync(join(out, `resync-${date}.json`), `${JSON.stringify(data, null, 2)}\n`);
+  writeFileSync(join(out, `resync-${date}.md`), renderReport(data));
+  console.log(join(out, `resync-${date}.md`));
+}

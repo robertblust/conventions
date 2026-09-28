@@ -69,7 +69,7 @@ export const SCANNED = [
 
 export function discover(file, text) {
   const base = file.split('/').pop();
-  const as = (kind, repos) => uniq(repos).map((repo) => ({ kind, file, repo }));
+  const as = (kind, repos) => uniq(repos.filter(Boolean)).map((repo) => ({ kind, file, repo }));
   try {
     if (file === 'conventions.json') return as('conventions', [JSON.parse(text).repo]);
     if (file === 'service-conventions.json') return as('service-conventions', [JSON.parse(text).repo]);

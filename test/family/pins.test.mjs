@@ -49,6 +49,7 @@ test('discover finds the pins of every scanned file', () => {
   assert.deepEqual(kinds(discover('.companygraph/manifest.json', '{"core":{"version":"0.46.0"}}')), ['core-release companygraph/meta-model']);
   assert.deepEqual(discover('source.json', 'not json'), []);
   assert.deepEqual(discover('package.json', '{"name":"no pins"}'), []);
+  assert.deepEqual(discover('conventions.json', '{ "exclude": ["docs/superpowers"], "format-exclude": [] }'), []);
 });
 
 test('validatePins refuses what the run could not follow', () => {
