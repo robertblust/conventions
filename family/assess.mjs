@@ -103,23 +103,30 @@ const VENDORED = new Set(['conventions.json', 'pins.json', 'AGENTS.md', 'CLAUDE.
 export const isVendored = (path) => path.startsWith('conventions/') || VENDORED.has(path);
 
 // The commits on main since the latest release, so the owner can tell a re-sync from real work
-// before deciding what to release. Merge commits are left out: they only carry the others.
+// before deciding what to release. Merge commits are left out: they only carry the others. A
+// commit that cannot be read costs the list, not the report: the compare link still stands.
 export function unreleasedCommits(github, repo) {
   const rel = github.latestRelease(repo);
   if (!rel) return null;
   const c = github.compare(repo, rel.tag, 'main');
   if (c.aheadBy <= 0) return null;
+  const found = { since: rel.tag, compare: `https://github.com/${repo}/compare/${rel.tag}...main` };
   const commits = [];
-  for (const sha of c.shas) {
-    const { subject, parents, files } = github.commit(repo, sha);
-    if (parents !== 1) continue;
-    commits.push({ sha, subject, resyncOnly: files.length > 0 && files.every(isVendored) });
+  try {
+    for (const sha of c.shas) {
+      const { subject, parents, files } = github.commit(repo, sha);
+      if (parents !== 1) continue;
+      commits.push({ sha, subject, resyncOnly: files.length > 0 && files.every(isVendored) });
+    }
+  } catch (e) {
+    return { ...found, commits: null, error: e.message };
   }
-  return { since: rel.tag, compare: `https://github.com/${repo}/compare/${rel.tag}...main`, commits };
+  return { ...found, commits };
 }
 
 // Whether main's checks pass, so a red main is seen in the report and not first when the run
 // blocks on it.
+// A main with no check runs is `none`, which the report shows as green.
 const FAILED = new Set(['failure', 'cancelled', 'timed_out', 'action_required']);
 export function mainState(github, repo) {
   const runs = github.checks(repo);

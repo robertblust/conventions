@@ -154,3 +154,13 @@ test('the Main section is one line when every main is green or has no checks', (
   const md = renderReport(assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' }));
   assert.match(md, /## Main\n\nEvery member's main is green\.\n\n## Level 0/);
 });
+
+test('a commit the report cannot read leaves its list, not the report', () => {
+  const github = world();
+  github.commits['robertblust/design:s2'] = () => { throw new Error('HTTP 502'); };
+  const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
+  const m = Object.fromEntries(r.members.map((x) => [x.repo, x]));
+  assert.deepEqual(m['robertblust/design'].unreleased, { since: 'v2.1.0', compare: 'https://github.com/robertblust/design/compare/v2.1.0...main', commits: null, error: 'HTTP 502' });
+  const md = renderReport(r);
+  assert.match(md, /- robertblust\/design: unreleased work on main: 2 commits since v2\.1\.0\n  - \[v2\.1\.0\.\.\.main\]\(https:\/\/github\.com\/robertblust\/design\/compare\/v2\.1\.0\.\.\.main\)\n  - the commits could not be read: HTTP 502\n\n/);
+});
