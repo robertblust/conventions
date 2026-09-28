@@ -521,6 +521,16 @@ then ok "a repository added to the table and not to the drawing is reported"
 else bad "an undrawn repository was not reported: $(undrawn "$TMP/REPOSITORIES.md")"
 fi
 
+# The family report and run carry their own tests, on Node's runner.
+if command -v node > /dev/null 2>&1; then
+  if node --test "$HERE"/test/family/*.test.mjs > "$TMP/family.out" 2>&1
+  then ok "the family report and run pass their tests"
+  else bad "the family tests failed: $(tail -30 "$TMP/family.out")"
+  fi
+else
+  bad "node is not on the path, so the family tests did not run"
+fi
+
 # the workflow's declared release and the marker version cannot drift apart
 workflow_release=$(sed -n 's/^ *CONVENTIONS_RELEASE: *//p' "$HERE/.github/workflows/check.yml")
 marker_version=$(sed -n '1s/.*· \(v[^ ]*\) -->.*/\1/p' "$HERE/AGENTS.md")
