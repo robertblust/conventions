@@ -156,7 +156,7 @@ echo '{"tooling":"0.0.0"}' > "$FAKEHOME/git/acme/mental-model/.companygraph/mani
 printf '| Repository | Title | Purpose | Default branch | Local path |\n| --- | --- | --- | --- | --- |\n| acme/mental-model | M | m | main | ~/git/acme/mental-model |\n' > "$MEMBER/repositories.test.md"
 STUB=$TMP/stub
 mkdir -p "$STUB"
-printf 'require("fs").writeFileSync(process.env.STUB_ARGS, process.argv.slice(2).join(" ")); process.stderr.write("stub: exit " + process.env.STUB_EXIT + "\\n"); process.exit(Number(process.env.STUB_EXIT));\n' > "$STUB/cli.cjs"
+printf 'require("fs").writeFileSync(process.env.STUB_ARGS, process.argv.slice(2).join(" ")); process.stdout.write(process.env.STUB_EXIT === "0" ? "stub: passed\\n" : "stub: refused on stdout\\n"); process.stderr.write("stub: exit " + process.env.STUB_EXIT + "\\n"); process.exit(Number(process.env.STUB_EXIT));\n' > "$STUB/cli.cjs"
 git -C "$MEMBER" remote add origin https://github.com/acme/widget.git
 try_commit() {
   ( cd "$MEMBER" && HOME=$FAKEHOME COMPANYGRAPH_CLI=$STUB/cli.cjs STUB_ARGS=$STUB/args STUB_EXIT=$1 \
@@ -168,9 +168,59 @@ if out=$(try_commit 3); then refused=0; else refused=1; fi
 if [ "$refused" -eq 1 ] && [ -f "$STUB/args" ] && echo "$out" | grep -q 'stub: exit 3'
 then ok "the hook refuses on the checker's refusal"; else bad "the hook let a refused commit through, or refused without the checker: $out"; fi
 if out=$(try_commit 1) && echo "$out" | grep -q 'seat check did not run'; then ok "the hook lets a commit through when the checker cannot run, and says so"; else bad "the hook refused, or said nothing, when the checker could not run: $out"; fi
+if out=$(try_commit 0) && ! echo "$out" | grep -q 'stub: passed'; then ok "a passing check prints nothing from the checker's stdout"; else bad "a passing check printed the checker's stdout: $out"; fi
+if out=$(try_commit 3); then out="not refused: $out"; fi
+if echo "$out" | grep -q 'stub: refused on stdout' && echo "$out" | grep -q 'git commit --author' && echo "$out" | grep -q 'WORKING.md'
+then ok "a refusal keeps the checker's text and says how to fix the commit"; else bad "a refusal lost the checker's text or gave no fix: $out"; fi
 rm -rf "$FAKEHOME/git/acme/mental-model"
 if out=$(try_commit 3) && echo "$out" | grep -q 'no clone of acme/mental-model'; then ok "the hook names a missing instance clone and lets the commit through"; else bad "the hook refused, or did not name the missing clone: $out"; fi
 rm -f "$MEMBER/repositories.test.md"
+
+# The hook runs the checker through npx, which clones meta-model. Git exports GIT_INDEX_FILE to
+# the hook in a linked worktree and for commit -a, and a clone that inherits it writes
+# meta-model's index over the member's. A stand-in npx on the PATH refuses when any of git's
+# repository variables reaches it, and records what it was asked to run.
+SEATED=$TMP/seated
+NPXBIN=$TMP/npxbin
+mkdir -p "$SEATED" "$NPXBIN" "$FAKEHOME/git/acme/mental-model/.companygraph"
+echo '{ "name": "acme", "tooling" : "4.5.6" }' > "$FAKEHOME/git/acme/mental-model/.companygraph/manifest.json"
+cat > "$NPXBIN/npx" << 'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$NPX_ARGS"
+for v in GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE; do
+  eval "val=\${$v:-}"
+  if [ -n "$val" ]; then echo "npx stub: $v reached the checker as $val" >&2; exit 3; fi
+done
+exit 0
+EOF
+chmod +x "$NPXBIN/npx"
+seated() {
+  ( cd "$1" && shift && HOME=$FAKEHOME PATH=$NPXBIN:$PATH NPX_ARGS=$TMP/npx-args CONVENTIONS_REPOSITORIES=repositories.test.md \
+      git -c user.name=R -c user.email=r@x.io "$@" 2>&1 )
+}
+git -C "$SEATED" init -q
+mkdir -p "$SEATED/conventions/hooks"
+cp "$HERE/conventions/hooks/commit-msg" "$SEATED/conventions/hooks/commit-msg"
+printf '| Repository | Title | Purpose | Default branch | Local path |\n| --- | --- | --- | --- | --- |\n| acme/mental-model | M | m | main | ~/git/acme/mental-model |\n' > "$SEATED/repositories.test.md"
+echo one > "$SEATED/a.txt"
+git -C "$SEATED" remote add origin https://github.com/acme/widget.git
+git -C "$SEATED" config core.hooksPath conventions/hooks
+git -C "$SEATED" add -A
+if out=$(seated "$SEATED" commit -q -m first); then ok "a commit in the main checkout passes the hook"; else bad "a commit in the main checkout failed: $out"; fi
+if grep -qx -- "--yes --prefer-offline --package github:companygraph/meta-model#v4.5.6 companygraph commits $FAKEHOME/git/acme/mental-model --message .*" "$TMP/npx-args" 2> /dev/null
+then ok "the hook runs the checker at the release the governing manifest's tooling names"; else bad "npx was not asked for meta-model#v4.5.6: $(cat "$TMP/npx-args" 2> /dev/null)"; fi
+git -C "$SEATED" worktree add -q "$TMP/seated-side" -b side 2> /dev/null
+echo two > "$TMP/seated-side/b.txt"
+git -C "$TMP/seated-side" add b.txt
+if out=$(seated "$TMP/seated-side" commit -q -m second); then ok "a commit in a linked worktree passes the hook"; else bad "a commit in a linked worktree failed: $out"; fi
+if [ -z "$(git -C "$TMP/seated-side" status --porcelain 2>&1)" ] && [ "$(git -C "$TMP/seated-side" ls-files | tr '\n' ' ')" = "a.txt b.txt conventions/hooks/commit-msg repositories.test.md " ]
+then ok "the worktree's index is its own after the commit"; else bad "the worktree's index was changed: $(git -C "$TMP/seated-side" status --porcelain 2>&1)"; fi
+echo changed > "$SEATED/a.txt"
+if out=$(seated "$SEATED" commit -q -a -m third); then ok "a commit -a passes the hook"; else bad "a commit -a failed: $out"; fi
+if [ -z "$(git -C "$SEATED" status --porcelain 2>&1)" ] && [ "$(git -C "$SEATED" ls-files | tr '\n' ' ')" = "a.txt conventions/hooks/commit-msg repositories.test.md " ]
+then ok "the index is its own after commit -a"; else bad "commit -a left the index changed: $(git -C "$SEATED" status --porcelain 2>&1)"; fi
+if [ "$(wc -l < "$TMP/npx-args" | tr -d ' ')" = 3 ]; then ok "each of those commits ran the checker"; else bad "the checker did not run for every commit: $(cat "$TMP/npx-args")"; fi
+rm -rf "$FAKEHOME/git/acme/mental-model"
 
 # --- conventions-sync: a script that knows to re-exec fetches itself first ------------------
 # This proves the mechanism for a script that already carries it: its own FILES is trimmed by
