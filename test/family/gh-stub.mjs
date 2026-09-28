@@ -25,7 +25,9 @@ if (a === 'pr' && b === 'list') {
 } else if (a === 'pr' && b === 'create') {
   const number = state.prs.length + 1;
   const url = `https://github.com/${repo}/pull/${number}`;
-  state.prs.push({ repo, number, head: opt('--head'), state: 'OPEN', url, title: opt('--title'), body: opt('--body') });
+  const head = opt('--head');
+  const closed = (process.env.GH_STUB_CLOSE ?? '').split(',').includes(`${repo}:${head}`);
+  state.prs.push({ repo, number, head, state: closed ? 'CLOSED' : 'OPEN', url, title: opt('--title'), body: opt('--body') });
   save();
   console.log(url);
 } else if (a === 'pr' && b === 'checks') {

@@ -10,6 +10,7 @@ import { realMember, Blocked } from '../../family/member.mjs';
 const STUB = fileURLToPath(new URL('./gh-stub.mjs', import.meta.url));
 const A = 'a'.repeat(40);
 const B = 'b'.repeat(40);
+const C = 'c'.repeat(40);
 const git = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' }).trim();
 
 function setup({ email = 'test@example.com' } = {}) {
@@ -22,7 +23,7 @@ function setup({ email = 'test@example.com' } = {}) {
   writeFileSync(gitconfig, email ? `[user]\n\temail = ${email}\n\tname = Test\n` : '');
   Object.assign(process.env, {
     PATH: `${dirs.bin}:${process.env.PATH}`, GH_STUB_DIR: dirs.stub, FAMILY_REMOTE: dirs.remote, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1',
-    GH_STUB_FAIL_CHECKS: '', GH_STUB_LATE_CHECKS: '',
+    GH_STUB_FAIL_CHECKS: '', GH_STUB_LATE_CHECKS: '', GH_STUB_CLOSE: '',
   });
   return dirs;
 }
@@ -84,13 +85,34 @@ test('a check that has not started yet is waited for', () => {
   assert.equal(out.pr, 'https://github.com/o/site/pull/1');
 });
 
-test('a second run the same day finds the merged pull request and opens none', () => {
+test('a second run the same day finds what the first merged and opens no new pull request', () => {
   const d = setup();
   seed(d.remote, 'o/site', siteFiles);
   member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
   const again = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
-  assert.equal(again.pr, 'https://github.com/o/site/pull/1');
+  assert.equal(again.pr, null);
+  assert.equal(again.note, 'the pins are already on main');
   assert.equal(calls(d).match(/pr create/g).length, 1);
+});
+
+test('an update whose pins are already on main returns pr: null with the note and opens no PR', () => {
+  const d = setup();
+  seed(d.remote, 'o/site', { 'source.json': `{"repo":"o/model","commit":"${B}"}\n` });
+  const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  assert.equal(out.pr, null);
+  assert.equal(out.note, 'the pins are already on main');
+  assert.equal(existsSync(join(d.stub, 'calls.log')), false);
+});
+
+test('a second update the same day with a different pin opens a pull request on the next branch', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', siteFiles);
+  member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  const pin2 = { ...pin, pinned: [B], available: C };
+  const out = member(d).update('o/site', [pin2], { date: '2026-09-28', verify: [] });
+  assert.equal(out.pr, 'https://github.com/o/site/pull/2');
+  assert.match(git(bare, 'show', 'main:source.json'), new RegExp(C));
+  assert.match(calls(d), /pr create --repo o\/site --head resync-2026-09-28-2/);
 });
 
 test('a clone without an address blocks the member', () => {
@@ -116,5 +138,80 @@ test('a dry run commits locally and asks GitHub for nothing', () => {
   const out = member(d, { dryRun: true }).update('o/site', [pin], { date: '2026-09-28', verify: [] });
   assert.equal(out.pr, null);
   assert.equal(existsSync(join(d.stub, 'calls.log')), false);
-  assert.match(git(join(d.git, 'o/site-resync-2026-09-28'), 'log', '-1', '--format=%s'), /^Takes model bbbbbbb$/);
+  assert.match(git(join(d.git, 'o/site-dry-run-2026-09-28'), 'log', '-1', '--format=%s'), /^Takes model bbbbbbb$/);
+});
+
+test('a dry run followed by a real run merges on the real branch', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', siteFiles);
+  member(d, { dryRun: true }).update('o/site', [pin], { date: '2026-09-28', verify: ['test -f built.txt'] });
+  const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: ['test -f built.txt'] });
+  assert.equal(out.pr, 'https://github.com/o/site/pull/1');
+  assert.equal(git(bare, 'show', 'main:built.txt'), 'built');
+  assert.match(git(bare, 'show', 'main:source.json'), new RegExp(B));
+  assert.match(calls(d), /pr create --repo o\/site --head resync-2026-09-28 /);
+  assert.equal(existsSync(join(d.git, 'o/site-resync-2026-09-28')), false);
+});
+
+test('a stale reused worktree still pushes and merges after being reset', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', siteFiles);
+  const branch = 'resync-2026-09-28';
+  const dir = join(d.git, 'o/site');
+  mkdirSync(dirname(dir), { recursive: true });
+  git(d.git, 'clone', '-q', bare, dir);
+  const wt = join(d.git, `o/site-${branch}`);
+  git(dir, 'worktree', 'add', '-q', '-B', branch, wt, 'origin/main');
+  writeFileSync(join(wt, 'source.json'), `{"repo":"o/model","commit":"${B}"}\n`);
+  git(wt, 'add', '-A');
+  git(wt, '-c', 'user.email=test@example.com', '-c', 'user.name=Test', 'commit', '-q', '-m', 'Takes model, cut short');
+  git(wt, 'push', '-q', '-u', 'origin', branch);
+  const other = mkdtempSync(join(tmpdir(), 'other-'));
+  git(other, 'clone', '-q', '-b', branch, bare, '.');
+  writeFileSync(join(other, 'extra.txt'), 'extra\n');
+  git(other, 'add', '-A');
+  git(other, '-c', 'user.email=other@example.com', '-c', 'user.name=Other', 'commit', '-q', '-m', 'Extra upstream commit');
+  git(other, 'push', '-q', 'origin', branch);
+  const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  assert.equal(out.pr, 'https://github.com/o/site/pull/1');
+  assert.equal(git(bare, 'show', 'main:extra.txt'), 'extra');
+  assert.match(git(bare, 'show', 'main:source.json'), new RegExp(B));
+});
+
+test('a closed pull request blocks a later run with the closed-by-hand reason', () => {
+  const d = setup();
+  seed(d.remote, 'o/site', siteFiles);
+  process.env.GH_STUB_CLOSE = 'o/site:resync-2026-09-28';
+  process.env.GH_STUB_FAIL_CHECKS = 'o/site';
+  assert.throws(() => member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] }), /required check did not pass/);
+  process.env.GH_STUB_FAIL_CHECKS = '';
+  assert.throws(
+    () => member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] }),
+    (e) => e instanceof Blocked && /pull request #1 of o\/site was closed by hand/.test(e.message),
+  );
+});
+
+test('a clone with uncommitted changes is left alone', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', siteFiles);
+  const dir = join(d.git, 'o/site');
+  mkdirSync(dirname(dir), { recursive: true });
+  git(d.git, 'clone', '-q', bare, dir);
+  const before = git(dir, 'rev-parse', 'HEAD');
+  writeFileSync(join(dir, 'source.json'), 'dirty\n');
+  const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  assert.equal(out.note, 'the clone was left alone with uncommitted changes');
+  assert.equal(git(dir, 'rev-parse', 'HEAD'), before);
+  assert.equal(readFileSync(join(dir, 'source.json'), 'utf8'), 'dirty\n');
+  assert.equal(out.pr, 'https://github.com/o/site/pull/1');
+});
+
+test('a release whose bump is already on main tags without opening a PR', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/server', { VERSION: '0.2.0\n' });
+  const out = member(d).release('o/server', 'v0.2.0', 'Notes.\n', ['printf "{version}\\n" > VERSION'], { date: '2026-09-28' });
+  assert.equal(out.tag, 'v0.2.0');
+  assert.doesNotMatch(calls(d), /pr create/);
+  const state = JSON.parse(readFileSync(join(d.stub, 'state.json'), 'utf8'));
+  assert.deepEqual(state.releases.map((r) => [r.tag, r.target]), [['v0.2.0', git(bare, 'rev-parse', 'main')]]);
 });
