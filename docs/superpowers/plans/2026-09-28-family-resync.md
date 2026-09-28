@@ -55,9 +55,41 @@ Expected: the last line prints `robert.blust@flatland.ch`.
 
 In the “What pins what” paragraph make three replacements, each string exactly once:
 
-- `All three sites also depend on `companygraph/meta-model` by tag in `package.json` for the instance parser.` → `All three sites also depend on `companygraph/meta-model` by tag in `package.json` for the instance parser, and take `companygraph/mcp-server` by tag there too.`
-- `and the server by tag in `package.json`, and builds` → `and the server and `robertblust/design` by tag in `package.json`, and builds`
-- `The chat server pins nothing of the family: it is a client of whichever MCP host a deployment names, and each of the same three deployments pins it by tag in `chat/package.json`` → `The chat server takes `companygraph/mcp-server` by tag in `package.json` as a development dependency and is a client of whichever MCP host a deployment names, and each of the same three deployments pins it and `robertblust/design` by tag in `chat/package.json``
+Replace:
+
+```text
+All three sites also depend on `companygraph/meta-model` by tag in `package.json` for the instance parser.
+```
+
+With:
+
+```text
+All three sites also depend on `companygraph/meta-model` by tag in `package.json` for the instance parser, and take `companygraph/mcp-server` by tag there too.
+```
+
+Replace:
+
+```text
+and the server by tag in `package.json`, and builds
+```
+
+With:
+
+```text
+and the server and `robertblust/design` by tag in `package.json`, and builds
+```
+
+Replace:
+
+```text
+The chat server pins nothing of the family: it is a client of whichever MCP host a deployment names, and each of the same three deployments pins it by tag in `chat/package.json`
+```
+
+With:
+
+```text
+The chat server takes `companygraph/mcp-server` by tag in `package.json` as a development dependency and is a client of whichever MCP host a deployment names, and each of the same three deployments pins it and `robertblust/design` by tag in `chat/package.json`
+```
 
 - [ ] **Step 3: Edit the drawing**
 
@@ -173,8 +205,18 @@ The report names every entry that does not match a line in the file it names, so
 - [ ] **Step 5: Vendor it and name it**
 
 - `conventions/conventions-sync:22`: add `PINS.md` after `REPOSITORIES.md` in `FILES`.
-- `AGENTS.md` block, after the `REPOSITORIES.md` line: `- `conventions/PINS.md` — what a member pins and how the family resync moves it.`
-- `README.md`, in the list of files near the top, after the `REPOSITORIES.md` line: `- `conventions/PINS.md` — how a member declares its pins in `pins.json`, for the family resync.`
+- `AGENTS.md` block, after the `REPOSITORIES.md` line, add the line below.
+
+  ```text
+  - `conventions/PINS.md` — what a member pins and how the family resync moves it.
+  ```
+
+- `README.md`, in the list of files near the top, after the `REPOSITORIES.md` line, add the line below.
+
+  ```text
+  - `conventions/PINS.md` — how a member declares its pins in `pins.json`, for the family resync.
+  ```
+
 - `.gitignore`, at the end:
 
 ```text
@@ -184,7 +226,39 @@ The report names every entry that does not match a line in the file it names, so
 
 - [ ] **Step 6: Amend the spec where the plan settled it**
 
-In `docs/superpowers/specs/2026-09-28-family-resync-design.md`, section 3: replace `` `release` runs when the member is released and leaves the version bump uncommitted for the run to commit. `` with `` `release` runs when the member is released, with `{version}` for the new version without its `v`, and leaves the bump uncommitted for the run to commit. `` In section 4, replace `a pin the members hold that the paragraph and drawing of `REPOSITORIES.md` do not show` with `a pin the members hold that the drawing in `REPOSITORIES.md` does not show — the drawing is the form a script can read, and the note beside it holds the paragraph to it —`, and add after the paragraph on levels: `A member's pin on itself, as conventions' own `conventions.json` is, is not an edge.`
+In `docs/superpowers/specs/2026-09-28-family-resync-design.md`, section 3:
+
+Replace:
+
+```text
+`release` runs when the member is released and leaves the version bump uncommitted for the run to commit.
+```
+
+With:
+
+```text
+`release` runs when the member is released, with `{version}` for the new version without its `v`, and leaves the bump uncommitted for the run to commit.
+```
+
+In section 4:
+
+Replace:
+
+```text
+a pin the members hold that the paragraph and drawing of `REPOSITORIES.md` do not show
+```
+
+With:
+
+```text
+a pin the members hold that the drawing in `REPOSITORIES.md` does not show — the drawing is the form a script can read, and the note beside it holds the paragraph to it —
+```
+
+And after the paragraph on levels in section 4, add:
+
+```text
+A member's pin on itself, as conventions' own `conventions.json` is, is not an edge.
+```
 
 - [ ] **Step 7: Run the checks**
 
@@ -2209,7 +2283,11 @@ A member joins by adding `pins.json`, as `conventions/PINS.md` describes. Until 
 
 - [ ] **Step 5: Name `family/` in this repository's part of `AGENTS.md`**
 
-In the paragraph that begins “The tests are `sh test/run.sh`”, after its first sentence, add: `It also runs the tests of `family/`, the family report and resync, on Node's own runner.`
+In the paragraph that begins “The tests are `sh test/run.sh`”, after its first sentence, add:
+
+```text
+It also runs the tests of `family/`, the family report and resync, on Node's own runner.
+```
 
 - [ ] **Step 6: Run the checks**
 
