@@ -29,6 +29,8 @@ sh conventions/conventions-sync check   # exit 1 with one ✗ line per thing tha
 sh conventions/conventions-sync sync    # bring the copy to the release conventions.json names
 ```
 
+`sync` also points `core.hooksPath` at the vendored `conventions/hooks` in a member's clone. This repository is the source rather than a member, its own `conventions.json` carries no pin, and `sync` does not run here, so run `git config core.hooksPath conventions/hooks` once by hand instead.
+
 Then add `.github/workflows/conventions.yml`, which calls the job every member runs:
 
 ```yaml

@@ -122,6 +122,106 @@ if echo "$out" | grep -q 'no conventions.json'; then ok "a member without a pin 
 out=$(run frobnicate 2>&1 || true)
 if echo "$out" | grep -q '^usage:'; then ok "an unknown command prints usage"; else bad "no usage on an unknown command: $out"; fi
 
+# The seat hook: vendored, executable, in use where sync runs in a clone, and never over a
+# hooks path a member set for itself or over hooks git already runs from its own directory.
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$MEMBER/conventions.json"
+run sync > /dev/null
+if [ -x "$MEMBER/conventions/hooks/commit-msg" ]; then ok "sync writes the seat hook, executable"; else bad "sync did not write an executable seat hook"; fi
+if grep -q '"conventions/hooks/commit-msg": "sha256:' "$MEMBER/conventions/manifest.json"
+then ok "the manifest holds the seat hook to the release"; else bad "the manifest does not hash the seat hook"; fi
+git -C "$MEMBER" init -q
+out=$(run sync 2>&1)
+if [ "$(git -C "$MEMBER" config core.hooksPath)" = "conventions/hooks" ]; then ok "sync points git at the hook"; else bad "sync did not set core.hooksPath"; fi
+if echo "$out" | grep -q 'not cloned'; then ok "sync says core.hooksPath is local config a clone does not carry"; else bad "sync did not say core.hooksPath is not cloned: $out"; fi
+git -C "$MEMBER" config core.hooksPath .husky
+out=$(run sync 2>&1)
+if [ "$(git -C "$MEMBER" config core.hooksPath)" = ".husky" ] && echo "$out" | grep -q 'core.hooksPath is .husky'; then ok "sync leaves a member's own hooks path, and says so"; else bad "sync overwrote or kept quiet about .husky: $out"; fi
+git -C "$MEMBER" config --unset core.hooksPath
+printf '#!/bin/sh\nexit 0\n' > "$MEMBER/.git/hooks/pre-commit"
+printf '#!/bin/sh\nexit 0\n' > "$MEMBER/.git/hooks/post-checkout"
+chmod +x "$MEMBER/.git/hooks/pre-commit" "$MEMBER/.git/hooks/post-checkout"
+out=$(run sync 2>&1)
+if [ -z "$(git -C "$MEMBER" config core.hooksPath || true)" ] && echo "$out" | grep -q 'holds post-checkout, pre-commit, which'
+then ok "sync does not switch off hooks the member runs from git's own directory, and names them"
+else bad "sync set core.hooksPath over existing hooks, or did not name them: $out"
+fi
+rm "$MEMBER/.git/hooks/pre-commit" "$MEMBER/.git/hooks/post-checkout"
+git -C "$MEMBER" config core.hooksPath conventions/hooks
+
+# The hook finds its organization's instance at the local path the list gives, and refuses only
+# on the checker's refusal. A stand-in checker records its arguments and exits as told.
+FAKEHOME=$TMP/home
+mkdir -p "$FAKEHOME/git/acme/mental-model/model" "$FAKEHOME/git/acme/mental-model/.companygraph"
+echo '{"tooling":"0.0.0"}' > "$FAKEHOME/git/acme/mental-model/.companygraph/manifest.json"
+printf '| Repository | Title | Purpose | Default branch | Local path |\n| --- | --- | --- | --- | --- |\n| acme/mental-model | M | m | main | ~/git/acme/mental-model |\n' > "$MEMBER/repositories.test.md"
+STUB=$TMP/stub
+mkdir -p "$STUB"
+printf 'require("fs").writeFileSync(process.env.STUB_ARGS, process.argv.slice(2).join(" ")); process.stdout.write(process.env.STUB_EXIT === "0" ? "stub: passed\\n" : "stub: refused on stdout\\n"); process.stderr.write("stub: exit " + process.env.STUB_EXIT + "\\n"); process.exit(Number(process.env.STUB_EXIT));\n' > "$STUB/cli.cjs"
+git -C "$MEMBER" remote add origin https://github.com/acme/widget.git
+try_commit() {
+  ( cd "$MEMBER" && HOME=$FAKEHOME COMPANYGRAPH_CLI=$STUB/cli.cjs STUB_ARGS=$STUB/args STUB_EXIT=$1 \
+      CONVENTIONS_REPOSITORIES=repositories.test.md git -c user.name=R -c user.email=r@x.io commit -q --allow-empty -m x 2>&1 )
+}
+if try_commit 0 > /dev/null && grep -q "commits $FAKEHOME/git/acme/mental-model --message" "$STUB/args"; then ok "the hook runs the check against its organization's instance"; else bad "the hook did not run the check against acme/mental-model: $(cat "$STUB/args" 2> /dev/null)"; fi
+rm -f "$STUB/args"
+if out=$(try_commit 3); then refused=0; else refused=1; fi
+if [ "$refused" -eq 1 ] && [ -f "$STUB/args" ] && echo "$out" | grep -q 'stub: exit 3'
+then ok "the hook refuses on the checker's refusal"; else bad "the hook let a refused commit through, or refused without the checker: $out"; fi
+if out=$(try_commit 1) && echo "$out" | grep -q 'seat check did not run'; then ok "the hook lets a commit through when the checker cannot run, and says so"; else bad "the hook refused, or said nothing, when the checker could not run: $out"; fi
+if out=$(try_commit 0) && ! echo "$out" | grep -q 'stub: passed'; then ok "a passing check prints nothing from the checker's stdout"; else bad "a passing check printed the checker's stdout: $out"; fi
+if out=$(try_commit 3); then out="not refused: $out"; fi
+if echo "$out" | grep -q 'stub: refused on stdout' && echo "$out" | grep -q 'git commit --author' && echo "$out" | grep -q 'WORKING.md'
+then ok "a refusal keeps the checker's text and says how to fix the commit"; else bad "a refusal lost the checker's text or gave no fix: $out"; fi
+rm -rf "$FAKEHOME/git/acme/mental-model"
+if out=$(try_commit 3) && echo "$out" | grep -q 'no clone of acme/mental-model'; then ok "the hook names a missing instance clone and lets the commit through"; else bad "the hook refused, or did not name the missing clone: $out"; fi
+rm -f "$MEMBER/repositories.test.md"
+
+# The hook runs the checker through npx, which clones meta-model. Git exports GIT_INDEX_FILE to
+# the hook in a linked worktree and for commit -a, and a clone that inherits it writes
+# meta-model's index over the member's. A stand-in npx on the PATH refuses when any of git's
+# repository variables reaches it, and records what it was asked to run.
+SEATED=$TMP/seated
+NPXBIN=$TMP/npxbin
+mkdir -p "$SEATED" "$NPXBIN" "$FAKEHOME/git/acme/mental-model/.companygraph"
+echo '{ "name": "acme", "tooling" : "4.5.6" }' > "$FAKEHOME/git/acme/mental-model/.companygraph/manifest.json"
+cat > "$NPXBIN/npx" << 'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$NPX_ARGS"
+for v in GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE; do
+  eval "val=\${$v:-}"
+  if [ -n "$val" ]; then echo "npx stub: $v reached the checker as $val" >&2; exit 3; fi
+done
+exit 0
+EOF
+chmod +x "$NPXBIN/npx"
+seated() {
+  ( cd "$1" && shift && HOME=$FAKEHOME PATH=$NPXBIN:$PATH NPX_ARGS=$TMP/npx-args CONVENTIONS_REPOSITORIES=repositories.test.md \
+      git -c user.name=R -c user.email=r@x.io "$@" 2>&1 )
+}
+git -C "$SEATED" init -q
+mkdir -p "$SEATED/conventions/hooks"
+cp "$HERE/conventions/hooks/commit-msg" "$SEATED/conventions/hooks/commit-msg"
+printf '| Repository | Title | Purpose | Default branch | Local path |\n| --- | --- | --- | --- | --- |\n| acme/mental-model | M | m | main | ~/git/acme/mental-model |\n' > "$SEATED/repositories.test.md"
+echo one > "$SEATED/a.txt"
+git -C "$SEATED" remote add origin https://github.com/acme/widget.git
+git -C "$SEATED" config core.hooksPath conventions/hooks
+git -C "$SEATED" add -A
+if out=$(seated "$SEATED" commit -q -m first); then ok "a commit in the main checkout passes the hook"; else bad "a commit in the main checkout failed: $out"; fi
+if grep -qx -- "--yes --prefer-offline --package github:companygraph/meta-model#v4.5.6 companygraph commits $FAKEHOME/git/acme/mental-model --message .*" "$TMP/npx-args" 2> /dev/null
+then ok "the hook runs the checker at the release the governing manifest's tooling names"; else bad "npx was not asked for meta-model#v4.5.6: $(cat "$TMP/npx-args" 2> /dev/null)"; fi
+git -C "$SEATED" worktree add -q "$TMP/seated-side" -b side 2> /dev/null
+echo two > "$TMP/seated-side/b.txt"
+git -C "$TMP/seated-side" add b.txt
+if out=$(seated "$TMP/seated-side" commit -q -m second); then ok "a commit in a linked worktree passes the hook"; else bad "a commit in a linked worktree failed: $out"; fi
+if [ -z "$(git -C "$TMP/seated-side" status --porcelain 2>&1)" ] && [ "$(git -C "$TMP/seated-side" ls-files | tr '\n' ' ')" = "a.txt b.txt conventions/hooks/commit-msg repositories.test.md " ]
+then ok "the worktree's index is its own after the commit"; else bad "the worktree's index was changed: $(git -C "$TMP/seated-side" status --porcelain 2>&1)"; fi
+echo changed > "$SEATED/a.txt"
+if out=$(seated "$SEATED" commit -q -a -m third); then ok "a commit -a passes the hook"; else bad "a commit -a failed: $out"; fi
+if [ -z "$(git -C "$SEATED" status --porcelain 2>&1)" ] && [ "$(git -C "$SEATED" ls-files | tr '\n' ' ')" = "a.txt conventions/hooks/commit-msg repositories.test.md " ]
+then ok "the index is its own after commit -a"; else bad "commit -a left the index changed: $(git -C "$SEATED" status --porcelain 2>&1)"; fi
+if [ "$(wc -l < "$TMP/npx-args" | tr -d ' ')" = 3 ]; then ok "each of those commits ran the checker"; else bad "the checker did not run for every commit: $(cat "$TMP/npx-args")"; fi
+rm -rf "$FAKEHOME/git/acme/mental-model"
+
 # --- conventions-sync: a script that knows to re-exec fetches itself first ------------------
 # This proves the mechanism for a script that already carries it: its own FILES is trimmed by
 # hand to look like an older release's, but the re-exec code stays, which is the case every
@@ -537,6 +637,29 @@ marker_version=$(sed -n '1s/.*· \(v[^ ]*\) -->.*/\1/p' "$HERE/AGENTS.md")
 if [ "$workflow_release" = "$marker_version" ]
 then ok "check.yml's release and AGENTS.md's marker agree on $marker_version"
 else bad "check.yml declares $workflow_release, AGENTS.md's marker names $marker_version"
+fi
+
+# the check job judges a model-less member's pull request against its organization's instance
+yml=$HERE/.github/workflows/check.yml
+# shellcheck disable=SC2016 # literal workflow expression, not command substitution
+if grep -q 'fetch-depth: 0' "$yml" && grep -q 'repository: ${{ github.repository_owner }}/mental-model' "$yml" \
+  && grep -q "hashFiles('.companygraph/manifest.json') == ''" "$yml" && grep -q 'companygraph commits .governing-instance --range' "$yml" \
+  && grep -q 'COMPANYGRAPH_RELEASE: v0.60.0' "$yml"
+then ok "the check job judges a model-less member's commits against its organization's instance"; else bad "check.yml does not run the seat check for a member with no model"; fi
+
+# this repository's own CI checks its pull requests against robertblust/mental-model too, since
+# it carries no model of its own and calls ci.yml rather than the reusable check.yml
+ci=$HERE/.github/workflows/ci.yml
+if grep -q 'fetch-depth: 0' "$ci" && grep -q 'repository: robertblust/mental-model' "$ci" \
+  && grep -q 'path: .governing-instance' "$ci" && grep -q 'COMPANYGRAPH_RELEASE: v0.60.0' "$ci" \
+  && grep -q "if: github.event_name == 'pull_request'$" "$ci"
+then ok "ci.yml checks out robertblust/mental-model and gates the new steps on a pull request alone"
+else bad "ci.yml is missing the governing-instance checkout, its tag, or its pull_request-only gate"
+fi
+# shellcheck disable=SC2016 # literal workflow expressions, not command substitution
+if grep -q 'companygraph commits .governing-instance --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"' "$ci"
+then ok "ci.yml runs the seat check over the pull request's own commit range"
+else bad "ci.yml does not run companygraph commits over the pull request's range"
 fi
 
 if [ "$fails" -eq 0 ]; then echo "all pass"; else echo "$fails failing"; exit 1; fi

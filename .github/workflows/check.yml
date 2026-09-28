@@ -15,6 +15,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: the workflow's release is the member's pin
         run: |
           [ -f conventions.json ] || { echo "✗ conventions: no conventions.json here — a member names the release it follows" >&2; exit 1; }
@@ -32,3 +34,18 @@ jobs:
         with:
           node-version: 22
       - run: sh conventions/conventions-format
+      # A member with no model of its own is governed by its organization's instance. A member
+      # that is an instance runs the same check from the instance workflow, so it is skipped here.
+      - name: the governing instance
+        if: github.event_name == 'pull_request' && hashFiles('.companygraph/manifest.json') == ''
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.repository_owner }}/mental-model
+          path: .governing-instance
+      - name: every commit names a seat its phase lists
+        if: github.event_name == 'pull_request' && hashFiles('.companygraph/manifest.json') == ''
+        # This tag moves when a meta-model release changes what `commits` checks.
+        env:
+          COMPANYGRAPH_RELEASE: v0.60.0
+        run: |
+          npx --yes --package "github:companygraph/meta-model#${COMPANYGRAPH_RELEASE}" companygraph commits .governing-instance --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"

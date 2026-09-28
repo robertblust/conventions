@@ -10,11 +10,28 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - run: shellcheck conventions/conventions-sync conventions/conventions-check conventions/conventions-format test/run.sh
+      - run: shellcheck conventions/conventions-sync conventions/conventions-check conventions/conventions-format conventions/hooks/commit-msg test/run.sh
       - run: python3 -c "import yaml; [yaml.safe_load(open(f)) for f in ('.github/workflows/check.yml', '.github/workflows/ci.yml')]"
       - run: sh test/run.sh
       - run: sh conventions/conventions-check
       - run: sh conventions/conventions-format
+      # This repository carries no model of its own, so its own pull requests are governed by
+      # robertblust/mental-model, the same as every other model-less member of the organization.
+      - name: the governing instance
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v5
+        with:
+          repository: robertblust/mental-model
+          path: .governing-instance
+      - name: every commit names a seat its phase lists
+        if: github.event_name == 'pull_request'
+        # This tag moves when a meta-model release changes what `commits` checks.
+        env:
+          COMPANYGRAPH_RELEASE: v0.60.0
+        run: |
+          npx --yes --package "github:companygraph/meta-model#${COMPANYGRAPH_RELEASE}" companygraph commits .governing-instance --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
