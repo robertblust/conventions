@@ -597,4 +597,19 @@ if grep -q 'fetch-depth: 0' "$yml" && grep -q 'repository: ${{ github.repository
   && grep -q 'COMPANYGRAPH_RELEASE: v0.60.0' "$yml"
 then ok "the check job judges a model-less member's commits against its organization's instance"; else bad "check.yml does not run the seat check for a member with no model"; fi
 
+# this repository's own CI checks its pull requests against robertblust/mental-model too, since
+# it carries no model of its own and calls ci.yml rather than the reusable check.yml
+ci=$HERE/.github/workflows/ci.yml
+if grep -q 'fetch-depth: 0' "$ci" && grep -q 'repository: robertblust/mental-model' "$ci" \
+  && grep -q 'path: .governing-instance' "$ci" && grep -q 'COMPANYGRAPH_RELEASE: v0.60.0' "$ci" \
+  && grep -q "if: github.event_name == 'pull_request'$" "$ci"
+then ok "ci.yml checks out robertblust/mental-model and gates the new steps on a pull request alone"
+else bad "ci.yml is missing the governing-instance checkout, its tag, or its pull_request-only gate"
+fi
+# shellcheck disable=SC2016 # literal workflow expressions, not command substitution
+if grep -q 'companygraph commits .governing-instance --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"' "$ci"
+then ok "ci.yml runs the seat check over the pull request's own commit range"
+else bad "ci.yml does not run companygraph commits over the pull request's range"
+fi
+
 if [ "$fails" -eq 0 ]; then echo "all pass"; else echo "$fails failing"; exit 1; fi
