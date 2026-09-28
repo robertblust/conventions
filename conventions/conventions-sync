@@ -110,17 +110,18 @@ hooks_path() {
     return 0
   fi
   own=$(git rev-parse --git-path hooks)
-  case $own in /*) ;; *) own=$(git rev-parse --show-toplevel)/$own ;; esac
+  # Git for Windows prints an absolute path in drive form, C:/…, in a linked worktree.
+  case $own in /*|[A-Za-z]:*) ;; *) own=$(git rev-parse --show-toplevel)/$own ;; esac
   found=""
   if [ -d "$own" ]; then
     for h in "$own"/*; do
       [ -f "$h" ] || continue
       case $h in *.sample) continue ;; esac
-      found="$found ${h##*/}"
+      found="${found:+$found, }${h##*/}"
     done
   fi
   if [ -n "$found" ]; then
-    echo "! conventions: $own holds$found, which would stop running under core.hooksPath, so it is left unset and the seat check's hook in $DIR/hooks is not in use" >&2
+    echo "! conventions: $own holds $found, which would stop running under core.hooksPath, so it is left unset and the seat check's hook in $DIR/hooks is not in use" >&2
     return 0
   fi
   git config core.hooksPath "$DIR/hooks"

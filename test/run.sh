@@ -138,13 +138,14 @@ out=$(run sync 2>&1)
 if [ "$(git -C "$MEMBER" config core.hooksPath)" = ".husky" ] && echo "$out" | grep -q 'core.hooksPath is .husky'; then ok "sync leaves a member's own hooks path, and says so"; else bad "sync overwrote or kept quiet about .husky: $out"; fi
 git -C "$MEMBER" config --unset core.hooksPath
 printf '#!/bin/sh\nexit 0\n' > "$MEMBER/.git/hooks/pre-commit"
-chmod +x "$MEMBER/.git/hooks/pre-commit"
+printf '#!/bin/sh\nexit 0\n' > "$MEMBER/.git/hooks/post-checkout"
+chmod +x "$MEMBER/.git/hooks/pre-commit" "$MEMBER/.git/hooks/post-checkout"
 out=$(run sync 2>&1)
-if [ -z "$(git -C "$MEMBER" config core.hooksPath || true)" ] && echo "$out" | grep -q 'pre-commit'
+if [ -z "$(git -C "$MEMBER" config core.hooksPath || true)" ] && echo "$out" | grep -q 'holds post-checkout, pre-commit, which'
 then ok "sync does not switch off hooks the member runs from git's own directory, and names them"
 else bad "sync set core.hooksPath over existing hooks, or did not name them: $out"
 fi
-rm "$MEMBER/.git/hooks/pre-commit"
+rm "$MEMBER/.git/hooks/pre-commit" "$MEMBER/.git/hooks/post-checkout"
 git -C "$MEMBER" config core.hooksPath conventions/hooks
 
 # The hook finds its organization's instance at the local path the list gives, and refuses only
@@ -155,19 +156,20 @@ echo '{"tooling":"0.0.0"}' > "$FAKEHOME/git/acme/mental-model/.companygraph/mani
 printf '| Repository | Title | Purpose | Default branch | Local path |\n| --- | --- | --- | --- | --- |\n| acme/mental-model | M | m | main | ~/git/acme/mental-model |\n' > "$MEMBER/repositories.test.md"
 STUB=$TMP/stub
 mkdir -p "$STUB"
-printf 'require("fs").writeFileSync(process.env.STUB_ARGS, process.argv.slice(2).join(" ")); process.exit(Number(process.env.STUB_EXIT));\n' > "$STUB/cli.cjs"
+printf 'require("fs").writeFileSync(process.env.STUB_ARGS, process.argv.slice(2).join(" ")); process.stderr.write("stub: exit " + process.env.STUB_EXIT + "\\n"); process.exit(Number(process.env.STUB_EXIT));\n' > "$STUB/cli.cjs"
 git -C "$MEMBER" remote add origin https://github.com/acme/widget.git
 try_commit() {
   ( cd "$MEMBER" && HOME=$FAKEHOME COMPANYGRAPH_CLI=$STUB/cli.cjs STUB_ARGS=$STUB/args STUB_EXIT=$1 \
       CONVENTIONS_REPOSITORIES=repositories.test.md git -c user.name=R -c user.email=r@x.io commit -q --allow-empty -m x 2>&1 )
 }
 if try_commit 0 > /dev/null && grep -q "commits $FAKEHOME/git/acme/mental-model --message" "$STUB/args"; then ok "the hook runs the check against its organization's instance"; else bad "the hook did not run the check against acme/mental-model: $(cat "$STUB/args" 2> /dev/null)"; fi
-if ! try_commit 3 > /dev/null; then ok "the hook refuses on the checker's refusal"; else bad "the hook let a refused commit through"; fi
-out=$(try_commit 1)
-if echo "$out" | grep -q 'seat check did not run'; then ok "the hook lets a commit through when the checker cannot run, and says so"; else bad "the hook said nothing when the checker could not run: $out"; fi
+rm -f "$STUB/args"
+if out=$(try_commit 3); then refused=0; else refused=1; fi
+if [ "$refused" -eq 1 ] && [ -f "$STUB/args" ] && echo "$out" | grep -q 'stub: exit 3'
+then ok "the hook refuses on the checker's refusal"; else bad "the hook let a refused commit through, or refused without the checker: $out"; fi
+if out=$(try_commit 1) && echo "$out" | grep -q 'seat check did not run'; then ok "the hook lets a commit through when the checker cannot run, and says so"; else bad "the hook refused, or said nothing, when the checker could not run: $out"; fi
 rm -rf "$FAKEHOME/git/acme/mental-model"
-out=$(try_commit 3)
-if echo "$out" | grep -q 'no clone of acme/mental-model'; then ok "the hook names a missing instance clone and lets the commit through"; else bad "the hook did not name the missing clone: $out"; fi
+if out=$(try_commit 3) && echo "$out" | grep -q 'no clone of acme/mental-model'; then ok "the hook names a missing instance clone and lets the commit through"; else bad "the hook refused, or did not name the missing clone: $out"; fi
 rm -f "$MEMBER/repositories.test.md"
 
 # --- conventions-sync: a script that knows to re-exec fetches itself first ------------------
