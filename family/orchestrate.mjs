@@ -35,11 +35,13 @@ export function orchestrate({ report, selection, github, member, date, dryRun = 
   // A dry run releases nothing, so what takes a member it would have released finds nothing
   // behind; it says what it would re-pin instead of that it has nothing to move.
   const wouldRelease = new Set();
+  // A release answers its tag, and a note where its bump could not be authored as the Implementer.
   const release = (repo, ...args) => {
-    const tag = member.release(repo, ...args).tag;
+    const { tag, note = null } = member.release(repo, ...args);
     if (dryRun) wouldRelease.add(repo);
-    return tag;
+    return { tag, note };
   };
+  const notes = (...xs) => [...new Set(xs.filter(Boolean).flatMap((x) => x.split('; ')))].join('; ') || null;
   const top = Math.max(0, ...[...closure].map((r) => levelOf.get(r) ?? 0));
   for (let l = 1; l <= top; l++) {
     const cache = new Map();
@@ -71,7 +73,8 @@ export function orchestrate({ report, selection, github, member, date, dryRun = 
       if (releasing && pendingRelease(github, repo)) {
         const unreleased = releaseBlock(github, repo);
         if (unreleased) return ['blocked', { reason: unreleased }];
-        return ['done', { release: release(repo, nextMinor(github.latestRelease(repo)?.tag), pendingNotes(), current.declared.release ?? [], { date }) }];
+        const r = release(repo, nextMinor(github.latestRelease(repo)?.tag), pendingNotes(), current.declared.release ?? [], { date });
+        return ['done', { release: r.tag, ...(r.note ? { note: r.note } : {}) }];
       }
       const upstreams = managedEdges.filter((e) => e.from === repo && wouldRelease.has(e.to) && e.kinds.some((k) => !NON_PROPAGATING.has(k))).map((e) => e.to).sort();
       if (!upstreams.length) return ['skipped', { reason: 'nothing to move' }];
@@ -83,16 +86,16 @@ export function orchestrate({ report, selection, github, member, date, dryRun = 
     if (unreleased) return ['blocked', { reason: unreleased }];
     const landed = member.update(repo, pins, { date, verify: current.declared.verify ?? [] });
     landedWith(landed);
-    let tag = null;
+    let released = { tag: null, note: null };
     if (releases) {
-      tag = release(repo, nextMinor(github.latestRelease(repo)?.tag), releaseNotes(pins), current.declared.release ?? [], { date });
+      released = release(repo, nextMinor(github.latestRelease(repo)?.tag), releaseNotes(pins), current.declared.release ?? [], { date });
     } else if (releasing && pendingRelease(github, repo)) {
       // Only vendored pins moved, but an earlier run left a release undone that a later level
       // of this run takes, so it is finished here as on the pending path.
       const blocked = releaseBlock(github, repo);
       if (blocked) return ['blocked', { reason: blocked, pr: landed.pr, merge: landed.merge }];
-      tag = release(repo, nextMinor(github.latestRelease(repo)?.tag), pendingNotes(), current.declared.release ?? [], { date });
+      released = release(repo, nextMinor(github.latestRelease(repo)?.tag), pendingNotes(), current.declared.release ?? [], { date });
     }
-    return ['done', { pr: landed.pr, merge: landed.merge, release: tag, note: landed.note ?? null }];
+    return ['done', { pr: landed.pr, merge: landed.merge, release: released.tag, note: notes(landed.note, released.note) }];
   }
 }

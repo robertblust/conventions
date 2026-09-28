@@ -200,7 +200,7 @@ test('a clone with uncommitted changes is left alone', () => {
   const before = git(dir, 'rev-parse', 'HEAD');
   writeFileSync(join(dir, 'source.json'), 'dirty\n');
   const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
-  assert.equal(out.note, 'the clone was left alone with uncommitted changes');
+  assert.match(out.note, /^the clone was left alone with uncommitted changes; no clone of o\/mental-model, so the commits carry the person's name$/);
   assert.equal(git(dir, 'rev-parse', 'HEAD'), before);
   assert.equal(readFileSync(join(dir, 'source.json'), 'utf8'), 'dirty\n');
   assert.equal(out.pr, 'https://github.com/o/site/pull/1');
@@ -293,4 +293,61 @@ test('an update that moves only a vendored pin lands on its own resync-vendored 
   assert.match(calls(d), /pr create --repo o\/site --head resync-vendored-2026-09-28 /);
   assert.match(git(bare, 'show', 'main:conventions.json'), /v1\.35\.0/);
   assert.equal(existsSync(join(d.git, 'o/site-resync-vendored-2026-09-28')), false);
+});
+
+// The governing instance a member names in its REPOSITORIES.md: a clone at a local path, with a
+// manifest and an identity whose url gives the seat's domain.
+function instance(d, url = 'https://www.example.org') {
+  const dir = join(d.git, 'o/mental-model');
+  mkdirSync(join(dir, '.companygraph'), { recursive: true });
+  mkdirSync(join(dir, 'model'), { recursive: true });
+  writeFileSync(join(dir, '.companygraph/manifest.json'), '{}\n');
+  writeFileSync(join(dir, 'model/identity.md'), `---\nsource: Local\nurl: ${url}\n---\n\n# Example\n`);
+  return dir;
+}
+const listing = (path) => `| Repository | Title | Purpose | Default branch | Local path |\n| --- | --- | --- | --- | --- |\n| o/mental-model | O — Mental Model | x | main | ${path} |\n`;
+const authorAndMessage = (bare, rev) => git(bare, 'log', '-1', '--format=%an <%ae>%n%cn <%ce>%n%B', rev);
+
+test('a re-sync commit is authored as the Implementer at the governing instance\'s domain, with the trailers', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', { ...siteFiles, 'conventions/REPOSITORIES.md': listing(instance(d)) });
+  const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  assert.equal(out.note, null);
+  const [author, committer, ...message] = authorAndMessage(bare, 'main^2').split('\n');
+  assert.equal(author, 'Implementer <implementer@example.org>');
+  assert.equal(committer, 'Test <test@example.com>');
+  assert.match(message.join('\n'), /\n\nVerified: `echo built > built\.txt` passed\.\n\nProcess: Delivery\nPhase: Implement\nTrack: Code$/);
+});
+
+test('a member that is itself an instance authors its re-sync at its own domain', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', {
+    ...siteFiles, '.companygraph/manifest.json': '{}\n', 'model/identity.md': '---\nurl: https://self.example\n---\n',
+    'conventions/REPOSITORIES.md': listing(instance(d)),
+  });
+  member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  assert.match(authorAndMessage(bare, 'main^2'), /^Implementer <implementer@self\.example>\n/);
+});
+
+test('a re-sync whose governing instance has no clone keeps the person as author and says so', () => {
+  const d = setup();
+  const missing = join(d.git, 'nowhere/mental-model');
+  const bare = seed(d.remote, 'o/site', { ...siteFiles, 'conventions/REPOSITORIES.md': listing(missing) });
+  const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  assert.equal(out.note, `no clone of o/mental-model at ${missing}, so the commits carry the person's name`);
+  assert.match(authorAndMessage(bare, 'main^2'), /^Test <test@example\.com>\nTest <test@example\.com>\n[\s\S]*\n\nProcess: Delivery\nPhase: Implement\nTrack: Code$/);
+});
+
+test('a release bump is authored as the Implementer, and without the clone keeps the person with a note', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/server', { VERSION: '0.1.0\n', 'conventions/REPOSITORIES.md': listing(instance(d)) });
+  const out = member(d).release('o/server', 'v0.2.0', 'Notes.\n', ['printf "{version}\\n" > VERSION'], { date: '2026-09-28' });
+  assert.deepEqual(out, { tag: 'v0.2.0', note: null });
+  assert.match(authorAndMessage(bare, 'main^2'), /^Implementer <implementer@example\.org>\n[\s\S]*\n\nProcess: Delivery\nPhase: Implement\nTrack: Code$/);
+
+  const e = setup();
+  const bare2 = seed(e.remote, 'o/server', { VERSION: '0.1.0\n' });
+  const out2 = member(e).release('o/server', 'v0.2.0', 'Notes.\n', ['printf "{version}\\n" > VERSION'], { date: '2026-09-28' });
+  assert.equal(out2.note, 'no clone of o/mental-model, so the commits carry the person\'s name');
+  assert.match(authorAndMessage(bare2, 'main^2'), /^Test <test@example\.com>\n/);
 });
