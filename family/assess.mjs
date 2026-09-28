@@ -97,6 +97,38 @@ export function releaseBlock(github, repo) {
   return ours ? null : `unreleased work on main: ${plural(c.aheadBy, 'commit')} since ${rel.tag}`;
 }
 
+// What the conventions sync writes into a member. A commit that touches nothing else is a
+// re-sync, a formality a release still owes but no one has to read.
+const VENDORED = new Set(['conventions.json', 'pins.json', 'AGENTS.md', 'CLAUDE.md', '.markdownlint-cli2.jsonc', '.github/workflows/conventions.yml']);
+export const isVendored = (path) => path.startsWith('conventions/') || VENDORED.has(path);
+
+// The commits on main since the latest release, so the owner can tell a re-sync from real work
+// before deciding what to release. Merge commits are left out: they only carry the others.
+export function unreleasedCommits(github, repo) {
+  const rel = github.latestRelease(repo);
+  if (!rel) return null;
+  const c = github.compare(repo, rel.tag, 'main');
+  if (c.aheadBy <= 0) return null;
+  const commits = [];
+  for (const sha of c.shas) {
+    const { subject, parents, files } = github.commit(repo, sha);
+    if (parents !== 1) continue;
+    commits.push({ sha, subject, resyncOnly: files.length > 0 && files.every(isVendored) });
+  }
+  return { since: rel.tag, compare: `https://github.com/${repo}/compare/${rel.tag}...main`, commits };
+}
+
+// Whether main's checks pass, so a red main is seen in the report and not first when the run
+// blocks on it.
+const FAILED = new Set(['failure', 'cancelled', 'timed_out', 'action_required']);
+export function mainState(github, repo) {
+  const runs = github.checks(repo);
+  const failing = [...new Set(runs.filter((r) => r.status === 'completed' && FAILED.has(r.conclusion)).map((r) => r.name))].sort();
+  if (failing.length) return { state: 'red', failing };
+  if (runs.some((r) => r.status !== 'completed')) return { state: 'pending', failing: [] };
+  return { state: runs.length ? 'green' : 'none', failing: [] };
+}
+
 // True when a member's main is ahead of its latest release only by commits the run itself made
 // (their pull request's head starts `resync-`), and at least one of them moved more than vendored
 // files, so a rerun can finish the release the first run left undone instead of finding nothing

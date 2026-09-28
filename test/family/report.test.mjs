@@ -121,3 +121,36 @@ test('a vendored and a propagating resync merge together are pending', () => {
   assert.equal(pendingRelease(github, 'robertblust/design'), true);
   assert.equal(releaseBlock(github, 'robertblust/design'), null);
 });
+
+test('a blocked member names its unreleased commits under its bullet, marking a re-sync', () => {
+  const github = world();
+  github.commits['robertblust/design:s1'] = { subject: 'Takes conventions v1.0.0', parents: 1, files: ['conventions/WRITING.md', 'conventions.json'] };
+  github.commits['robertblust/design:s2'] = { subject: 'Tokens | spacing', parents: 1, files: ['tokens.css'] };
+  const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
+  const m = Object.fromEntries(r.members.map((x) => [x.repo, x]));
+  assert.equal(m['robertblust/design'].unreleased.compare, 'https://github.com/robertblust/design/compare/v2.1.0...main');
+  assert.equal(m['robertblust/site'].unreleased, null);
+  const md = renderReport(r);
+  assert.match(md, /- robertblust\/design: unreleased work on main: 2 commits since v2\.1\.0\n  - \[v2\.1\.0\.\.\.main\]\(https:\/\/github\.com\/robertblust\/design\/compare\/v2\.1\.0\.\.\.main\)\n  - s1 Takes conventions v1\.0\.0 \(re-sync only\)\n  - s2 Tokens \\\| spacing\n/);
+});
+
+test('the Main section names a red, running or unknown main', () => {
+  const github = world();
+  github.runs['robertblust/design'] = [{ name: 'test', status: 'completed', conclusion: 'failure' }, { name: 'conventions', status: 'completed', conclusion: 'cancelled' }];
+  github.runs['robertblust/site'] = [{ name: 'test', status: 'in_progress', conclusion: null }];
+  github.runs['robertblust/conventions'] = () => { throw new Error('HTTP 502'); };
+  const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
+  const m = Object.fromEntries(r.members.map((x) => [x.repo, x]));
+  assert.deepEqual(m['robertblust/design'].main, { state: 'red', failing: ['conventions', 'test'] });
+  assert.deepEqual(m['robertblust/conventions'].main, { state: 'unknown', failing: [] });
+  assert.equal(m['robertblust/gone'].main, null);
+  const md = renderReport(r);
+  assert.match(md, /Blocked:[\s\S]*## Main\n\n- robertblust\/conventions: main's checks could not be read\n- robertblust\/design: main is red \(conventions, test\), so the run will block here\n- robertblust\/site: main's checks are still running\n\n## Level 0/);
+});
+
+test('the Main section is one line when every main is green or has no checks', () => {
+  const github = world();
+  github.runs['robertblust/design'] = [{ name: 'test', status: 'completed', conclusion: 'success' }];
+  const md = renderReport(assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' }));
+  assert.match(md, /## Main\n\nEvery member's main is green\.\n\n## Level 0/);
+});
