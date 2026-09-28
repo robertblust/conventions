@@ -5,6 +5,7 @@ How the robertblust, guestgraph and companygraph organizations write and work. E
 - `conventions/WRITING.md` — one voice, three registers, English and German, and how a text is made.
 - `conventions/WORKING.md` — git and GitHub: branches, merge commits, identity, releases, pins.
 - `conventions/REPOSITORIES.md` — the family, and what pins what.
+- `conventions/PINS.md` — how a member declares its pins in `pins.json`, for the family resync.
 - `conventions/WRITER.md`, `conventions/TRANSLATOR.md`, `conventions/EDITOR.md` and `conventions/BACKREADER.md` — the four roles that make a text: what each takes, produces and never does.
 - `conventions/GLOSSARY.md` — every family term in its fixed English and German form.
 - `conventions/GERMAN.md` — what Swiss Standard German asks beyond its marks: the Swiss words, the habits to avoid, the forms a check refuses and the owner's choices.
