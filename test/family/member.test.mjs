@@ -238,3 +238,46 @@ test('a release tags the merge of its own bump, not a change merged by hand afte
   assert.equal(state.releases[0].target, state.prs[0].merge);
   assert.notEqual(state.releases[0].target, git(bare, 'rev-parse', 'main'));
 });
+
+function leftWorktree(d, bare) {
+  const branch = 'resync-2026-09-28';
+  const dir = join(d.git, 'o/site');
+  mkdirSync(dirname(dir), { recursive: true });
+  git(d.git, 'clone', '-q', bare, dir);
+  const wt = join(d.git, `o/site-${branch}`);
+  git(dir, 'worktree', 'add', '-q', '-B', branch, wt, 'origin/main');
+  return wt;
+}
+const heldWork = (wt) => (e) => e instanceof Blocked && e.message === `${wt} holds work the run did not make; commit and push it to resync-2026-09-28, or remove the worktree, then run again`;
+
+test('a reused worktree with an edit the run did not make blocks the rerun and keeps the edit', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', siteFiles);
+  const wt = leftWorktree(d, bare);
+  writeFileSync(join(wt, 'fix.txt'), 'the owner\'s fix\n');
+  assert.throws(() => member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] }), heldWork(wt));
+  assert.equal(readFileSync(join(wt, 'fix.txt'), 'utf8'), 'the owner\'s fix\n');
+  assert.equal(existsSync(join(d.stub, 'calls.log')) && /pr create/.test(calls(d)), false);
+});
+
+test('a reused worktree with a local commit on no remote branch blocks the rerun and keeps the commit', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', siteFiles);
+  const wt = leftWorktree(d, bare);
+  writeFileSync(join(wt, 'fix.txt'), 'fix\n');
+  git(wt, 'add', '-A');
+  git(wt, 'commit', '-q', '-m', 'The owner\'s fix');
+  const head = git(wt, 'rev-parse', 'HEAD');
+  assert.throws(() => member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] }), heldWork(wt));
+  assert.equal(git(wt, 'rev-parse', 'HEAD'), head);
+});
+
+test('a worktree the run itself left behind when it blocked is reset on the rerun', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', siteFiles);
+  assert.throws(() => member(d).update('o/site', [pin], { date: '2026-09-28', verify: ['false'] }), /`false` failed/);
+  assert.equal(readFileSync(join(d.git, 'o/site-resync-2026-09-28', 'built.txt'), 'utf8'), 'built\n');
+  const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  assert.equal(out.pr, 'https://github.com/o/site/pull/1');
+  assert.match(git(bare, 'show', 'main:source.json'), new RegExp(B));
+});

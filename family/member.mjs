@@ -4,11 +4,12 @@
 // throws Blocked, and the run holds what is downstream. A rerun is idempotent on what a pin's
 // file holds, not on a branch name: a branch is chosen by walking past whatever a prior day's
 // run already merged, a reused worktree is reset to what the branch actually holds before
-// anything runs again, and a dry run works its own throwaway branch so it never leaves a
-// worktree a real run would mistake for its own.
+// anything runs again, unless it holds work the run did not leave there, which blocks; and a
+// dry run works its own throwaway branch so it never leaves a worktree a real run would mistake
+// for its own.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, readdirSync, mkdirSync, rmSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { gh } from './gh.mjs';
 import { KINDS } from './pins.mjs';
@@ -74,12 +75,59 @@ export function realMember({
     git(dir, 'worktree', 'add', '-q', '-B', branch, wt, base);
   }
 
+  // What a worktree holds when the run blocks in it: its commit and the tree of every file in it,
+  // written beside the worktree's own git files. A rerun that finds the worktree holding exactly
+  // that knows the leftovers are its own; anything else is work a person did there.
+  const leftPath = (wt) => {
+    const p = git(wt, 'rev-parse', '--git-path', 'resync-left');
+    return isAbsolute(p) ? p : join(wt, p);
+  };
+  function snapshot(wt) {
+    const index = `${leftPath(wt)}.index`;
+    rmSync(index, { force: true });
+    const env = { ...process.env, GIT_INDEX_FILE: index };
+    const run = (...args) => execFileSync('git', args, { cwd: wt, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    try {
+      run('add', '-A');
+      return `${git(wt, 'rev-parse', 'HEAD')} ${run('write-tree')}`;
+    } finally {
+      rmSync(index, { force: true });
+    }
+  }
+  function remember(wt) {
+    try {
+      writeFileSync(leftPath(wt), snapshot(wt));
+    } catch {
+      // without the note a rerun treats the leftovers as a person's and blocks, which is safe
+    }
+  }
+  function leftByRun(wt) {
+    const path = leftPath(wt);
+    return existsSync(path) && readFileSync(path, 'utf8') === snapshot(wt);
+  }
+  const whileIn = (wt, fn) => {
+    try {
+      return fn();
+    } catch (e) {
+      if (existsSync(wt)) remember(wt);
+      throw e;
+    }
+  };
+
   function worktree(repo, dir, branch) {
     const wt = join(root, `${repo}-${branch}`);
-    const base = onRemote(dir, branch) ? `origin/${branch}` : 'origin/main';
+    const remote = onRemote(dir, branch);
+    const base = remote ? `origin/${branch}` : 'origin/main';
     if (existsSync(wt)) {
       git(wt, 'fetch', '-q', 'origin');
+      const dirty = git(wt, 'status', '--porcelain') !== '';
+      const unpushed = git(wt, 'rev-list', 'HEAD', '--not', 'origin/main', ...(remote ? [`origin/${branch}`] : [])) !== '';
+      if ((dirty || unpushed) && !leftByRun(wt)) {
+        throw new Blocked(`${wt} holds work the run did not make; commit and push it to ${branch}, or remove the worktree, then run again`);
+      }
       git(wt, 'reset', '-q', '--hard', base);
+      git(wt, 'clean', '-q', '-fd');
+      rmSync(leftPath(wt), { force: true });
       return wt;
     }
     git(dir, 'worktree', 'add', '-q', '-B', branch, wt, base);
@@ -259,11 +307,13 @@ export function realMember({
         return { pr: null, merge: null, note: combineNotes(cloneNote, 'the pins are already on main') };
       }
       const { wt, branch } = prepareWorktree(repo, dir, `resync-${date}`);
-      identity(wt);
-      const ran = [];
-      for (const p of pins) move(wt, p, ran);
-      for (const cmd of verify) { sh(wt, cmd); ran.push(cmd); }
-      return { ...land(repo, dir, wt, branch, commitMessage(pins, ran)), note: cloneNote };
+      return whileIn(wt, () => {
+        identity(wt);
+        const ran = [];
+        for (const p of pins) move(wt, p, ran);
+        for (const cmd of verify) { sh(wt, cmd); ran.push(cmd); }
+        return { ...land(repo, dir, wt, branch, commitMessage(pins, ran)), note: cloneNote };
+      });
     },
 
     release(repo, tag, notes, commands, { date }) {
@@ -283,28 +333,30 @@ export function realMember({
       if (commands.length) {
         const { dir } = clone(repo);
         const { wt, branch } = prepareWorktree(repo, dir, `resync-${date}-release`);
-        identity(wt);
-        const bump = () => {
-          const ran = [];
-          for (const c of commands) { const cmd = c.replaceAll('{version}', version); sh(wt, cmd); ran.push(cmd); }
-          return ran;
-        };
-        const ran = bump();
-        const subject = `The version reads ${version}`;
-        const body = `The family resync releases ${tag} so that the repositories taking this one can re-pin it.\n\nVerified: ${ran.length ? `${listed(ran.map((c) => `\`${c}\``))} passed` : 'the bump was already committed'}.`;
-        const message = { subject, body, full: `${subject}\n\n${body}\n` };
-        if (commitIfChanged(wt, message)) {
-          target = pushAndMerge(repo, dir, wt, branch, message).merge;
-        } else {
-          const main = git(wt, 'rev-parse', 'origin/main');
-          if (git(wt, 'rev-parse', 'HEAD') !== main) {
-            git(wt, 'reset', '-q', '--hard', main);
-            bump();
-            if (stage(wt)) throw new Blocked(`the bump to ${version} is not on main`);
+        target = whileIn(wt, () => {
+          identity(wt);
+          const bump = () => {
+            const ran = [];
+            for (const c of commands) { const cmd = c.replaceAll('{version}', version); sh(wt, cmd); ran.push(cmd); }
+            return ran;
+          };
+          const ran = bump();
+          const subject = `The version reads ${version}`;
+          const body = `The family resync releases ${tag} so that the repositories taking this one can re-pin it.\n\nVerified: ${ran.length ? `${listed(ran.map((c) => `\`${c}\``))} passed` : 'the bump was already committed'}.`;
+          const message = { subject, body, full: `${subject}\n\n${body}\n` };
+          if (commitIfChanged(wt, message)) {
+            return pushAndMerge(repo, dir, wt, branch, message).merge;
+          } else {
+            const main = git(wt, 'rev-parse', 'origin/main');
+            if (git(wt, 'rev-parse', 'HEAD') !== main) {
+              git(wt, 'reset', '-q', '--hard', main);
+              bump();
+              if (stage(wt)) throw new Blocked(`the bump to ${version} is not on main`);
+            }
+            cleanup(dir, wt, branch);
+            return main;
           }
-          target = main;
-          cleanup(dir, wt, branch);
-        }
+        });
       }
       if (dryRun) {
         log(`dry run: ${repo}: would release ${tag}`);
