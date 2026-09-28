@@ -203,3 +203,22 @@ test('a commit that cannot be read blocks and says so', () => {
   agentsFails.file = (repo, path, ref) => { if (path === 'AGENTS.md') throw new Error('HTTP 500'); return file(repo, path, ref); };
   assert.match(releaseBlock(agentsFails, 'robertblust/design'), /^unreleased work on main: 1 commit since v2\.1\.0, 1 commit could not be read: HTTP 500$/);
 });
+
+test('a rename into a vendored path is not re-sync only', () => {
+  const gh = resyncWorld();
+  gh.commits['robertblust/design:mv'] = { subject: 'Moves x', parents: 1, parent: 'p-mv', files: [{ filename: 'conventions/x', previous_filename: 'src/x' }] };
+  assert.equal(resyncOnly(gh, 'robertblust/design', 'mv'), false);
+});
+
+test('commits the compare does not list count as work', () => {
+  const gh = resyncWorld({ compares: { 'robertblust/design:v2.1.0...main': { aheadBy: 252, shas: ['vend', 'in'], files: [] } } });
+  assert.equal(releaseBlock(gh, 'robertblust/design'), 'unreleased work on main: 250 commits since v2.1.0');
+});
+
+test('a marker that only looks like the block is not the block', () => {
+  const gh = resyncWorld();
+  gh.commits['robertblust/design:local'] = { subject: 'Edits the local notes', parents: 1, parent: 'p-local', files: ['AGENTS.md'] };
+  gh.files['robertblust/design']['AGENTS.md@local'] = '<!-- conventions-local -->\nNew notes.\n<!-- end conventions -->\n';
+  gh.files['robertblust/design']['AGENTS.md@p-local'] = '<!-- conventions-local -->\nOld notes.\n<!-- end conventions -->\n';
+  assert.equal(resyncOnly(gh, 'robertblust/design', 'local'), false);
+});

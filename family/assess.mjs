@@ -91,14 +91,17 @@ export function assessPins(github, member, family, cache = new Map()) {
 // A member others take by tag owes no release for what the run or the conventions sync wrote,
 // only for work a person did, and that work is what blocks it: a release the run cut over it
 // would carry notes no one wrote. A merge commit only carries the others, so it is not counted
-// either way; its content is in the commits it merged. A commit that cannot be read counts as
-// work, because blocking is the side a wrong guess can be undone from.
+// either way; its content is in the commits it merged. A merge commit not from a `resync-` pull
+// request is therefore not counted, accepted because its merged commits are, though a conflict
+// resolved inside a merge is not seen. A commit that cannot be read counts as work, because
+// blocking is the side a wrong guess can be undone from, and so does every commit past the most
+// the compare lists, since it was never read at all.
 export function releaseBlock(github, repo) {
   const rel = github.latestRelease(repo);
   if (!rel) return 'has no release to follow';
   const c = github.compare(repo, rel.tag, 'main');
   if (c.aheadBy === 0) return null;
-  let work = 0;
+  let work = Math.max(0, c.aheadBy - c.shas.length);
   const unread = [];
   for (const sha of c.shas) {
     try {
@@ -116,14 +119,18 @@ export function releaseBlock(github, repo) {
   return `unreleased work on main: ${plural(work, 'commit')} since ${rel.tag}${why}`;
 }
 
-// What the conventions sync writes into a member. A commit that touches nothing else is a
-// re-sync, a formality a release still owes but no one has to read.
+// What the conventions sync writes into a member, and the files beside it a member keeps by
+// hand that no consumer builds from: pins.json, the conventions workflow, the excludes in
+// conventions.json and CLAUDE.md. A commit that touches nothing else is a re-sync, a formality
+// a release still owes but no one has to read, so a hand edit to one of these files counts as
+// re-sync only by design.
 const VENDORED = new Set(['conventions.json', 'pins.json', 'AGENTS.md', 'CLAUDE.md', '.markdownlint-cli2.jsonc', '.github/workflows/conventions.yml']);
 export const isVendored = (path) => path.startsWith('conventions/') || VENDORED.has(path);
 
 // AGENTS.md is vendored only in its block; the rest of it is the member's own, so a commit that
 // changes the rest is work however little it changed.
-const CONVENTIONS_BLOCK = /^<!-- conventions[^\n]*\n[\s\S]*?^<!-- end conventions -->$\n?/m;
+// The opening line is the sync's own form, OPEN_RE in conventions/conventions-sync.
+const CONVENTIONS_BLOCK = /^<!-- conventions · v[^ \n]* -->\n[\s\S]*?^<!-- end conventions -->$\n?/m;
 const ownText = (text) => (text ?? '').replace(CONVENTIONS_BLOCK, '');
 
 // Whether a commit only re-synced: it changed something, everything it changed is vendored, and

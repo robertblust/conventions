@@ -32,7 +32,7 @@ export function realGithub() {
     },
     commit(repo, sha) {
       const c = found(repo, `repos/${repo}/commits/${sha}`);
-      return { subject: c.commit.message.split('\n')[0], parents: c.parents.length, parent: c.parents[0]?.sha ?? null, files: (c.files ?? []).map((f) => f.filename) };
+      return { subject: c.commit.message.split('\n')[0], parents: c.parents.length, parent: c.parents[0]?.sha ?? null, files: (c.files ?? []).flatMap((f) => (f.previous_filename ? [f.filename, f.previous_filename] : [f.filename])) };
     },
     checks(repo) {
       const c = found(repo, `repos/${repo}/commits/main/check-runs?per_page=100`);
