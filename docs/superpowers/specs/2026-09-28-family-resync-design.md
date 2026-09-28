@@ -37,7 +37,7 @@ The scan read local clones, and a local clone is not the family. The remote `mai
 | `npm-tag` | `github:owner/repo#tag` in a `package.json` | set the tag, `npm install` |
 | `source-commit` | an object with `repo` and `commit` in a JSON file, at the top or under a key | set the commit of the object whose `repo` matches |
 | `contract-commit` | a string `owner/repo@commit:path` in a JSON file | set the commit of every string for that repository |
-| `core-release` | `core.version` in `.companygraph/manifest.json` | the entry's own `move` command |
+| `core-release` | `tooling` in `.companygraph/manifest.json`, the meta-model release an instance took with its core | the entry's own `move` command, with `{version}` that release without its `v` |
 
 A member's `pins.json` lists its pins and its two member-wide steps:
 

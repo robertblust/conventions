@@ -80,3 +80,17 @@ test('work on main since the last release blocks a release unless the run made i
   assert.equal(releaseBlock(gh, 'robertblust/design'), null);
   assert.equal(releaseBlock(gh, 'robertblust/model'), 'has no release to follow');
 });
+
+test('a core pin is behind when meta-model has a newer release than the tooling the instance took', () => {
+  const gh = fakeGithub({
+    files: {
+      'robertblust/model': {
+        '.companygraph/manifest.json': '{"tooling":"0.57.0","core":{"version":"0.46.0"}}',
+        'pins.json': JSON.stringify({ pins: [{ kind: 'core-release', file: '.companygraph/manifest.json', repo: 'companygraph/meta-model', move: 'upgrade {version}' }] }),
+      },
+    },
+    releases: { 'companygraph/meta-model': { tag: 'v0.58.0', url: 'um' } },
+  });
+  const [pin] = assessPins(gh, readMember(gh, 'robertblust/model'), new Set(['robertblust/model', 'companygraph/meta-model']));
+  assert.deepEqual([pin.pinned, pin.available, pin.status], [['0.57.0'], '0.58.0', 'behind']);
+});

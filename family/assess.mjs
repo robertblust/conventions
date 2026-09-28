@@ -29,9 +29,9 @@ function offered(github, cache, kind, repo) {
   if (!cache.has(key)) {
     let value;
     if (kind === 'core-release') {
+      // An instance records the meta-model release it took as `tooling`, a version without its v.
       const rel = github.latestRelease(repo);
-      const manifest = rel && github.file(repo, 'core/manifest.json', rel.tag);
-      value = { available: manifest ? JSON.parse(manifest).version : null, url: rel?.url ?? null };
+      value = { available: rel ? rel.tag.replace(/^v/, '') : null, url: rel?.url ?? null };
     } else if (KINDS[kind].byTag) {
       const rel = github.latestRelease(repo);
       value = { available: rel?.tag ?? null, url: rel?.url ?? null };

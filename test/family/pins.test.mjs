@@ -35,7 +35,7 @@ test('a contract pin moves every string of its repository and watches their path
 });
 
 test('a core pin reads core.version and is moved only by its own command', () => {
-  assert.deepEqual(KINDS['core-release'].read('{"tooling":"0.57.0","core":{"version":"0.46.0"}}'), ['0.46.0']);
+  assert.deepEqual(KINDS['core-release'].read('{"tooling":"0.57.0","core":{"version":"0.46.0"}}'), ['0.57.0']);
   assert.equal(KINDS['core-release'].write, null);
 });
 
@@ -46,7 +46,7 @@ test('discover finds the pins of every scanned file', () => {
   assert.deepEqual(kinds(discover('chat/package.json', '{"x":"github:companygraph/chat-server#v0.17.3","y":"github:robertblust/design#v0.87.0"}')), ['npm-tag companygraph/chat-server', 'npm-tag robertblust/design']);
   assert.deepEqual(kinds(discover('api-sources.json', `{"engine":{"repo":"guestgraph/engine","commit":"${A}"}}`)), ['source-commit guestgraph/engine']);
   assert.deepEqual(kinds(discover('src/main/resources/api/sources.json', `{"sources":["guestgraph/engine@${A}:x.yaml","guestgraph/engine@${B}:y.yaml"]}`)), ['contract-commit guestgraph/engine']);
-  assert.deepEqual(kinds(discover('.companygraph/manifest.json', '{"core":{"version":"0.46.0"}}')), ['core-release companygraph/meta-model']);
+  assert.deepEqual(kinds(discover('.companygraph/manifest.json', '{"tooling":"0.57.0","core":{"version":"0.46.0"}}')), ['core-release companygraph/meta-model']);
   assert.deepEqual(discover('source.json', 'not json'), []);
   assert.deepEqual(discover('package.json', '{"name":"no pins"}'), []);
   assert.deepEqual(discover('conventions.json', '{ "exclude": ["docs/superpowers"], "format-exclude": [] }'), []);
