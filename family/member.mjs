@@ -76,22 +76,29 @@ export function realMember({
     }
   };
 
+  // Fast-forwards a clone's `main` to `origin/main`, the one rule the run holds it to whether it
+  // is about to work or has just watched a pull request of its own merge: only when the clone is
+  // on `main` and clean does it move, and otherwise it says why it left the clone alone.
+  function fastForward(dir) {
+    git(dir, 'fetch', '-q', 'origin');
+    const branch = git(dir, 'rev-parse', '--abbrev-ref', 'HEAD');
+    if (branch !== 'main') return `the clone was left alone on ${branch}`;
+    if (git(dir, 'status', '--porcelain') !== '') return 'the clone was left alone with uncommitted changes';
+    try {
+      git(dir, 'merge', '-q', '--ff-only', 'origin/main');
+      return null;
+    } catch {
+      return 'the clone could not fast-forward main';
+    }
+  }
+
   function clone(repo) {
     const dir = join(root, repo);
     if (!existsSync(dir)) {
       mkdirSync(dirname(dir), { recursive: true });
       git(root, 'clone', '-q', `${remote}/${repo}.git`, dir);
     }
-    git(dir, 'fetch', '-q', 'origin');
-    const branch = git(dir, 'rev-parse', '--abbrev-ref', 'HEAD');
-    if (branch !== 'main') return { dir, note: `the clone was left alone on ${branch}` };
-    if (git(dir, 'status', '--porcelain') !== '') return { dir, note: 'the clone was left alone with uncommitted changes' };
-    try {
-      git(dir, 'merge', '-q', '--ff-only', 'origin/main');
-      return { dir, note: null };
-    } catch {
-      return { dir, note: 'the clone could not fast-forward main' };
-    }
+    return { dir, note: fastForward(dir) };
   }
 
   function onRemote(dir, branch) {
@@ -280,7 +287,7 @@ export function realMember({
   function pushAndMerge(repo, dir, wt, branch, message) {
     if (dryRun) {
       log(`dry run: ${repo}: committed in ${wt}; would push ${branch}, open “${message.subject}”, wait for its check and merge it`);
-      return { pr: null, merge: null };
+      return { pr: null, merge: null, note: null };
     }
     git(wt, 'push', '-q', '-u', 'origin', branch);
     let pr = existingPr(repo, branch);
@@ -290,7 +297,8 @@ export function realMember({
     }
     const landed = merge(repo, pr);
     cleanup(dir, wt, branch);
-    return landed;
+    // The merge just moved origin/main; the clone follows it under the same rule as before work.
+    return { ...landed, note: fastForward(dir) };
   }
 
   function land(repo, dir, wt, branch, message, author) {
@@ -337,7 +345,17 @@ export function realMember({
     });
   }
 
-  const combineNotes = (...notes) => notes.filter(Boolean).join('; ') || null;
+  const combineNotes = (...notes) => {
+    const seen = new Set();
+    const kept = [];
+    for (const n of notes) {
+      if (n && !seen.has(n)) {
+        seen.add(n);
+        kept.push(n);
+      }
+    }
+    return kept.join('; ') || null;
+  };
 
   return {
     update(repo, pins, { date, verify = [] }) {
@@ -355,7 +373,8 @@ export function realMember({
         const ran = [];
         for (const p of pins) move(wt, p, ran);
         for (const cmd of verify) { sh(wt, cmd); ran.push(cmd); }
-        return { ...land(repo, dir, wt, branch, commitMessage(pins, ran), seat.author), note: combineNotes(cloneNote, seat.note) };
+        const landed = land(repo, dir, wt, branch, commitMessage(pins, ran), seat.author);
+        return { ...landed, note: combineNotes(cloneNote, seat.note, landed.note) };
       });
     },
 
@@ -380,7 +399,6 @@ export function realMember({
         target = whileIn(wt, () => {
           identity(wt);
           const seat = implementerOf(wt, repo);
-          note = seat.note;
           const bump = () => {
             const ran = [];
             for (const c of commands) { const cmd = c.replaceAll('{version}', version); sh(wt, cmd); ran.push(cmd); }
@@ -391,7 +409,9 @@ export function realMember({
           const body = `The family resync releases ${tag} so that the repositories taking this one can re-pin it.\n\nVerified: ${ran.length ? `${listed(ran.map((c) => `\`${c}\``))} passed` : 'the bump was already committed'}.`;
           const message = { subject, body, full: `${subject}\n\n${body}\n\n${TRAILERS}\n` };
           if (commitIfChanged(wt, message, seat.author)) {
-            return pushAndMerge(repo, dir, wt, branch, message).merge;
+            const landed = pushAndMerge(repo, dir, wt, branch, message);
+            note = combineNotes(seat.note, landed.note);
+            return landed.merge;
           } else {
             const main = git(wt, 'rev-parse', 'origin/main');
             if (git(wt, 'rev-parse', 'HEAD') !== main) {
@@ -400,6 +420,7 @@ export function realMember({
               if (stage(wt)) throw new Blocked(`the bump to ${version} is not on main`);
             }
             cleanup(dir, wt, branch);
+            note = seat.note;
             return main;
           }
         });

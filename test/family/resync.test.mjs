@@ -1,13 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parseArgs, runResync } from '../../family/resync.mjs';
+import { parseArgs, runResync, cleanDryRuns } from '../../family/resync.mjs';
 import { assessFamily } from '../../family/report.mjs';
 import { KINDS } from '../../family/pins.mjs';
 import { fakeGithub } from './fake-github.mjs';
 import { renderRecord } from '../../family/render.mjs';
+
+const git = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' }).trim();
 
 test('the choice is all or chain numbers, with an optional dry run', () => {
   assert.deepEqual(parseArgs(['r.json', 'all']), { file: 'r.json', selection: 'all', dryRun: false });
@@ -15,6 +18,31 @@ test('the choice is all or chain numbers, with an optional dry run', () => {
   assert.equal(parseArgs(['r.json']), null);
   assert.equal(parseArgs(['r.json', 'x']), null);
   assert.equal(parseArgs(['r.json', '0']), null);
+});
+
+test('--clean-dry-runs takes no report argument', () => {
+  assert.deepEqual(parseArgs(['--clean-dry-runs']), { cleanDryRuns: true });
+});
+
+test('--clean-dry-runs removes only the dry-run worktree and its branch', () => {
+  const root = mkdtempSync(join(tmpdir(), 'clean-dry-runs-'));
+  const dir = join(root, 'o/site');
+  mkdirSync(dir, { recursive: true });
+  git(dir, 'init', '-q', '-b', 'main');
+  writeFileSync(join(dir, 'f.txt'), 'x\n');
+  git(dir, 'add', '-A');
+  git(dir, '-c', 'user.email=t@x', '-c', 'user.name=T', 'commit', '-q', '-m', 'seed');
+  const dryWt = join(root, 'o/site-dry-run-2026-09-28');
+  const realWt = join(root, 'o/site-resync-2026-09-28');
+  git(dir, 'worktree', 'add', '-q', '-b', 'dry-run-2026-09-28', dryWt);
+  git(dir, 'worktree', 'add', '-q', '-b', 'resync-2026-09-28', realWt);
+  const said = [];
+  cleanDryRuns({ root, members: [{ repo: 'o/site' }, { repo: 'o/absent' }], log: (m) => said.push(m) });
+  assert.equal(existsSync(dryWt), false);
+  assert.equal(existsSync(realWt), true);
+  assert.doesNotMatch(git(dir, 'branch', '--list'), /dry-run-2026-09-28/);
+  assert.match(git(dir, 'branch', '--list'), /resync-2026-09-28/);
+  assert.deepEqual(said, ['o/site: removed dry-run-2026-09-28']);
 });
 
 test('the run record has a row per member', () => {
