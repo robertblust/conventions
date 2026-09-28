@@ -122,6 +122,54 @@ if echo "$out" | grep -q 'no conventions.json'; then ok "a member without a pin 
 out=$(run frobnicate 2>&1 || true)
 if echo "$out" | grep -q '^usage:'; then ok "an unknown command prints usage"; else bad "no usage on an unknown command: $out"; fi
 
+# The seat hook: vendored, executable, in use where sync runs in a clone, and never over a
+# hooks path a member set for itself or over hooks git already runs from its own directory.
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$MEMBER/conventions.json"
+run sync > /dev/null
+if [ -x "$MEMBER/conventions/hooks/commit-msg" ]; then ok "sync writes the seat hook, executable"; else bad "sync did not write an executable seat hook"; fi
+if grep -q '"conventions/hooks/commit-msg": "sha256:' "$MEMBER/conventions/manifest.json"
+then ok "the manifest holds the seat hook to the release"; else bad "the manifest does not hash the seat hook"; fi
+git -C "$MEMBER" init -q
+out=$(run sync 2>&1)
+if [ "$(git -C "$MEMBER" config core.hooksPath)" = "conventions/hooks" ]; then ok "sync points git at the hook"; else bad "sync did not set core.hooksPath"; fi
+if echo "$out" | grep -q 'not cloned'; then ok "sync says core.hooksPath is local config a clone does not carry"; else bad "sync did not say core.hooksPath is not cloned: $out"; fi
+git -C "$MEMBER" config core.hooksPath .husky
+out=$(run sync 2>&1)
+if [ "$(git -C "$MEMBER" config core.hooksPath)" = ".husky" ] && echo "$out" | grep -q 'core.hooksPath is .husky'; then ok "sync leaves a member's own hooks path, and says so"; else bad "sync overwrote or kept quiet about .husky: $out"; fi
+git -C "$MEMBER" config --unset core.hooksPath
+printf '#!/bin/sh\nexit 0\n' > "$MEMBER/.git/hooks/pre-commit"
+chmod +x "$MEMBER/.git/hooks/pre-commit"
+out=$(run sync 2>&1)
+if [ -z "$(git -C "$MEMBER" config core.hooksPath || true)" ] && echo "$out" | grep -q 'pre-commit'
+then ok "sync does not switch off hooks the member runs from git's own directory, and names them"
+else bad "sync set core.hooksPath over existing hooks, or did not name them: $out"
+fi
+rm "$MEMBER/.git/hooks/pre-commit"
+git -C "$MEMBER" config core.hooksPath conventions/hooks
+
+# The hook finds its organization's instance at the local path the list gives, and refuses only
+# on the checker's refusal. A stand-in checker records its arguments and exits as told.
+FAKEHOME=$TMP/home
+mkdir -p "$FAKEHOME/git/acme/mental-model/model" "$FAKEHOME/git/acme/mental-model/.companygraph"
+echo '{"tooling":"0.0.0"}' > "$FAKEHOME/git/acme/mental-model/.companygraph/manifest.json"
+printf '| Repository | Title | Purpose | Default branch | Local path |\n| --- | --- | --- | --- | --- |\n| acme/mental-model | M | m | main | ~/git/acme/mental-model |\n' > "$MEMBER/repositories.test.md"
+STUB=$TMP/stub
+mkdir -p "$STUB"
+printf 'require("fs").writeFileSync(process.env.STUB_ARGS, process.argv.slice(2).join(" ")); process.exit(Number(process.env.STUB_EXIT));\n' > "$STUB/cli.cjs"
+git -C "$MEMBER" remote add origin https://github.com/acme/widget.git
+try_commit() {
+  ( cd "$MEMBER" && HOME=$FAKEHOME COMPANYGRAPH_CLI=$STUB/cli.cjs STUB_ARGS=$STUB/args STUB_EXIT=$1 \
+      CONVENTIONS_REPOSITORIES=repositories.test.md git -c user.name=R -c user.email=r@x.io commit -q --allow-empty -m x 2>&1 )
+}
+if try_commit 0 > /dev/null && grep -q "commits $FAKEHOME/git/acme/mental-model --message" "$STUB/args"; then ok "the hook runs the check against its organization's instance"; else bad "the hook did not run the check against acme/mental-model: $(cat "$STUB/args" 2> /dev/null)"; fi
+if ! try_commit 3 > /dev/null; then ok "the hook refuses on the checker's refusal"; else bad "the hook let a refused commit through"; fi
+out=$(try_commit 1)
+if echo "$out" | grep -q 'seat check did not run'; then ok "the hook lets a commit through when the checker cannot run, and says so"; else bad "the hook said nothing when the checker could not run: $out"; fi
+rm -rf "$FAKEHOME/git/acme/mental-model"
+out=$(try_commit 3)
+if echo "$out" | grep -q 'no clone of acme/mental-model'; then ok "the hook names a missing instance clone and lets the commit through"; else bad "the hook did not name the missing clone: $out"; fi
+rm -f "$MEMBER/repositories.test.md"
+
 # --- conventions-sync: a script that knows to re-exec fetches itself first ------------------
 # This proves the mechanism for a script that already carries it: its own FILES is trimmed by
 # hand to look like an older release's, but the re-exec code stays, which is the case every
