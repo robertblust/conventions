@@ -51,3 +51,13 @@ test('a member is released when a later member of the run takes it by tag', () =
   assert.equal(releasesIn('server', new Set(['server']), edges), false);
   assert.equal(releasesIn('robertblust/conventions', new Set(['design']), edges), false);
 });
+
+test('a behind conventions or service-conventions pin is a chain of its taker alone', () => {
+  const behind = [...pins.filter((p) => p.taker !== 'meta' || p.kind !== 'conventions'), pin('meta', 'robertblust/conventions', 'conventions', 'behind'), pin('chat', 'svc', 'service-conventions', 'behind')];
+  const edges = edgesOf(behind);
+  const { level } = levelsOf([...repos, 'svc'], edges);
+  const chains = chainsOf(behind, edges, level);
+  assert.deepEqual(chains.find((c) => c.taker === 'meta').steps, [['meta']]);
+  assert.deepEqual(chains.find((c) => c.kind === 'service-conventions').steps, [['chat']]);
+  assert.deepEqual(chains.find((c) => c.taker === 'server').steps, [['server'], ['chat', 'site'], ['deploy']]);
+});

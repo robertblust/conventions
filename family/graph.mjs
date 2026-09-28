@@ -4,6 +4,10 @@ import { KINDS } from './pins.mjs';
 
 export const CONVENTIONS = 'robertblust/conventions';
 export const TAG_KINDS = new Set(Object.keys(KINDS).filter((k) => KINDS[k].byTag));
+// A member that moved only one of these pins has nothing new to offer what takes it: the shared
+// files are for the member itself, and each taker re-syncs them from their own source. So such a
+// pin's chain is its taker alone, and moving it is never a reason to release.
+export const NON_PROPAGATING = new Set(['conventions', 'service-conventions']);
 
 export function edgesOf(pins) {
   const seen = new Map();
@@ -72,7 +76,7 @@ export function chainsOf(pins, edges, level) {
   return pins
     .filter((p) => p.status === 'behind')
     .sort((a, b) => rank(a) - rank(b) || a.taker.localeCompare(b.taker) || a.upstream.localeCompare(b.upstream))
-    .map((p, i) => ({ n: i + 1, taker: p.taker, kind: p.kind, file: p.file, upstream: p.upstream, available: p.available, steps: stepsOf(p.taker, edges, level) }));
+    .map((p, i) => ({ n: i + 1, taker: p.taker, kind: p.kind, file: p.file, upstream: p.upstream, available: p.available, steps: NON_PROPAGATING.has(p.kind) ? [[p.taker]] : stepsOf(p.taker, edges, level) }));
 }
 
 export function releasesIn(repo, closure, edges) {

@@ -191,3 +191,36 @@ test('a read GitHub fails for one member blocks that member, holds its downstrea
   assert.match(record[0].reason, /HTTP 502/);
   assert.match(record[2].reason, /waits on o\/server/);
 });
+
+const CONV = 'robertblust/conventions';
+const conv = { kind: 'conventions', file: 'conventions.json', repo: CONV };
+function withConventions(github) {
+  github.files[CONV] = {};
+  github.releases[CONV] = { tag: 'v1.35.0', url: 'uc' };
+  github.files['o/server']['conventions.json'] = `{"repo":"${CONV}","tag":"v1.34.0"}`;
+  github.files['o/server']['pins.json'] = declare([npm('o/meta'), conv], { verify: ['npm test'], release: ['bump {version}'] });
+  return github;
+}
+const withConv = [{ repo: CONV }, ...members];
+
+test('a conventions chain moves its taker alone and releases nothing', () => {
+  const github = withConventions(world());
+  const report = assessFamily({ github, members: withConv, drawing, date: '2026-09-28' });
+  const chain = report.chains.find((c) => c.kind === 'conventions');
+  assert.deepEqual(chain.steps, [['o/server']]);
+  const member = fakeMember(github);
+  const record = orchestrate({ report, selection: [chain.n], github, member, date: '2026-09-28' });
+  assert.deepEqual(member.calls.map((c) => `${c.op} ${c.repo} ${c.pins?.join(',') ?? c.tag}`), [`update o/server ${CONV}@v1.35.0`]);
+  assert.deepEqual(record.map((r) => `${r.repo} ${r.status} ${r.release}`), ['o/server done null']);
+});
+
+test('under all, a member that moved only its conventions pin is not released', () => {
+  const github = withConventions(world());
+  github.files['o/server']['package.json'] = '{"m":"github:o/meta#v2.0.0"}';
+  const report = assessFamily({ github, members: withConv, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  orchestrate({ report, selection: 'all', github, member, date: '2026-09-28' });
+  assert.deepEqual(member.calls.filter((c) => c.repo === 'o/server').map((c) => `${c.op} ${c.pins?.join(',') ?? c.tag}`), [`update ${CONV}@v1.35.0`]);
+  const site = member.calls.find((c) => c.repo === 'o/site');
+  assert.deepEqual([...site.pins].sort(), ['o/meta@v2.0.0', 'o/other@v1.1.0']);
+});

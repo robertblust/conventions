@@ -3,9 +3,10 @@
 // member downstream of one it had to block or found unmanaged. A member `releasesIn` counts is
 // decided from declared pins alone, so an upstream one takes in a file its pins.json does not
 // name never causes a release; and a member whose pins already moved but whose own release the
-// last run left undone is released again here rather than skipped as having nothing to move.
+// last run left undone is released again here rather than skipped as having nothing to move. A
+// member that moved only its conventions or service-conventions pin is not released.
 import { readMember, assessPins, releaseBlock, pendingRelease } from './assess.mjs';
-import { releasesIn, edgesOf } from './graph.mjs';
+import { releasesIn, edgesOf, NON_PROPAGATING } from './graph.mjs';
 import { pinKey } from './pins.mjs';
 import { releaseNotes, pendingNotes } from './words.mjs';
 
@@ -66,11 +67,12 @@ export function orchestrate({ report, selection, github, member, date, log = () 
       }
       return ['skipped', { reason: 'nothing to move' }];
     }
-    const unreleased = releasing ? releaseBlock(github, repo) : null;
+    const releases = releasing && pins.some((p) => !NON_PROPAGATING.has(p.kind));
+    const unreleased = releases ? releaseBlock(github, repo) : null;
     if (unreleased) return ['blocked', { reason: unreleased }];
     const landed = member.update(repo, pins, { date, verify: current.declared.verify ?? [] });
     landedWith(landed);
-    const release = releasing
+    const release = releases
       ? member.release(repo, nextMinor(github.latestRelease(repo)?.tag), releaseNotes(pins), current.declared.release ?? [], { date }).tag
       : null;
     return ['done', { pr: landed.pr, merge: landed.merge, release, note: landed.note ?? null }];
