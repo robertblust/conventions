@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readMember, assessPins, releaseBlock, unreleasedCommits, isVendored, mainState } from '../../family/assess.mjs';
+import { readMember, assessPins, releaseBlock, unreleasedCommits, isVendored, resyncOnly, mainState } from '../../family/assess.mjs';
 import { fakeGithub } from './fake-github.mjs';
 
 const A = 'a'.repeat(40);
@@ -134,4 +134,72 @@ test('main is red, pending, none or green by its check runs', () => {
   assert.deepEqual(state([run('test', 'completed', 'success'), run('build', 'queued')]), { state: 'pending', failing: [] });
   assert.deepEqual(state([]), { state: 'none', failing: [] });
   assert.deepEqual(state([run('test', 'completed', 'success'), run('skip', 'completed', 'skipped'), run('n', 'completed', 'neutral')]), { state: 'green', failing: [] });
+});
+
+const BLOCK = '<!-- conventions · v1.35.0 -->\nShared conventions live in `conventions/`.\n<!-- end conventions -->\n';
+const agents = (block, own) => `${block}${own}`;
+function resyncWorld(extra = {}) {
+  return fakeGithub({
+    releases: { 'robertblust/design': { tag: 'v2.1.0', url: 'u2' } },
+    files: {
+      'robertblust/design': {
+        'AGENTS.md@in': agents(BLOCK.replace('v1.35.0', 'v1.36.0'), '# Own\n\nThe design system.\n'),
+        'AGENTS.md@p-in': agents(BLOCK, '# Own\n\nThe design system.\n'),
+        'AGENTS.md@out': agents(BLOCK, '# Own\n\nThe design system, edited by hand.\n'),
+        'AGENTS.md@p-out': agents(BLOCK, '# Own\n\nThe design system.\n'),
+      },
+    },
+    commits: {
+      'robertblust/design:vend': { subject: 'Takes conventions v1.36.0', parents: 1, parent: 'p-vend', files: ['conventions/WRITING.md', 'conventions.json', 'pins.json'] },
+      'robertblust/design:own': { subject: 'Tokens gain a spacing scale', parents: 1, parent: 'p-own', files: ['conventions.json', 'tokens.css'] },
+      'robertblust/design:in': { subject: 'Takes conventions v1.36.0', parents: 1, parent: 'p-in', files: ['AGENTS.md', 'conventions/WORKING.md'] },
+      'robertblust/design:out': { subject: 'Says more about the tokens', parents: 1, parent: 'p-out', files: ['AGENTS.md'] },
+      'robertblust/design:merge': { subject: 'Merge pull request #9', parents: 2, parent: 'p-merge', files: ['conventions.json'] },
+      'robertblust/design:empty': { subject: 'Nothing', parents: 1, parent: 'p-empty', files: [] },
+    },
+    ...extra,
+  });
+}
+
+test('a commit is re-sync only when it changes vendored files alone and AGENTS.md only inside the block', () => {
+  const gh = resyncWorld();
+  assert.equal(resyncOnly(gh, 'robertblust/design', 'vend'), true);
+  assert.equal(resyncOnly(gh, 'robertblust/design', 'own'), false);
+  assert.equal(resyncOnly(gh, 'robertblust/design', 'in'), true);
+  assert.equal(resyncOnly(gh, 'robertblust/design', 'out'), false);
+  assert.equal(resyncOnly(gh, 'robertblust/design', 'merge'), false);
+  assert.equal(resyncOnly(gh, 'robertblust/design', 'empty'), false);
+});
+
+test('an AGENTS.md missing on one side counts as empty', () => {
+  const gh = resyncWorld();
+  gh.commits['robertblust/design:new'] = { subject: 'Adds AGENTS.md', parents: 1, parent: 'p-new', files: ['AGENTS.md'] };
+  gh.files['robertblust/design']['AGENTS.md@new'] = BLOCK;
+  assert.equal(resyncOnly(gh, 'robertblust/design', 'new'), true);
+  gh.files['robertblust/design']['AGENTS.md@new'] = `${BLOCK}Own text.\n`;
+  assert.equal(resyncOnly(gh, 'robertblust/design', 'new'), false);
+});
+
+const since = (shas) => ({ compares: { 'robertblust/design:v2.1.0...main': { aheadBy: shas.length, shas, files: [] } } });
+
+test('commits that only re-synced do not block a release', () => {
+  assert.equal(releaseBlock(resyncWorld(since(['vend', 'in'])), 'robertblust/design'), null);
+});
+
+test('one real commit among re-sync-only ones blocks, counted alone', () => {
+  assert.equal(releaseBlock(resyncWorld(since(['vend', 'out', 'in'])), 'robertblust/design'), 'unreleased work on main: 1 commit since v2.1.0');
+});
+
+test('the merge of a re-sync-only pull request does not block', () => {
+  assert.equal(releaseBlock(resyncWorld(since(['vend', 'merge'])), 'robertblust/design'), null);
+});
+
+test('a commit that cannot be read blocks and says so', () => {
+  const gh = resyncWorld(since(['vend', 'in']));
+  gh.commits['robertblust/design:vend'] = () => { throw new Error('HTTP 502'); };
+  assert.equal(releaseBlock(gh, 'robertblust/design'), 'unreleased work on main: 1 commit since v2.1.0, 1 commit could not be read: HTTP 502');
+  const agentsFails = resyncWorld(since(['vend', 'in']));
+  const file = agentsFails.file;
+  agentsFails.file = (repo, path, ref) => { if (path === 'AGENTS.md') throw new Error('HTTP 500'); return file(repo, path, ref); };
+  assert.match(releaseBlock(agentsFails, 'robertblust/design'), /^unreleased work on main: 1 commit since v2\.1\.0, 1 commit could not be read: HTTP 500$/);
 });

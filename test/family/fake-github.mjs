@@ -16,7 +16,7 @@ export function fakeGithub({ files = {}, releases = {}, heads = {}, compares = {
     pullHeads(repo, sha) { gate(repo); return pulls[`${repo}:${sha}`] ?? []; },
     commit(repo, sha) {
       gate(repo);
-      const c = commits[`${repo}:${sha}`] ?? { subject: sha, parents: 1, files: [] };
+      const c = commits[`${repo}:${sha}`] ?? { subject: sha, parents: 1, parent: `${sha}^`, files: [] };
       return typeof c === 'function' ? c() : c;
     },
     checks(repo) { gate(repo); const c = checks[repo] ?? []; return typeof c === 'function' ? c() : c; },
