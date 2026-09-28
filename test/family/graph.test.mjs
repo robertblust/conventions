@@ -61,3 +61,10 @@ test('a behind conventions or service-conventions pin is a chain of its taker al
   assert.deepEqual(chains.find((c) => c.kind === 'service-conventions').steps, [['chat']]);
   assert.deepEqual(chains.find((c) => c.taker === 'server').steps, [['server'], ['chat', 'site'], ['deploy']]);
 });
+
+test('a behind pin whose taker is on or above a cycle starts no chain', () => {
+  const cyclic = [pin('a', 'b'), pin('b', 'a', 'npm-tag', 'behind'), pin('c', 'a', 'npm-tag', 'behind'), pin('d', 'e', 'npm-tag', 'behind')];
+  const edges = edgesOf(cyclic);
+  const { level } = levelsOf(['a', 'b', 'c', 'd', 'e'], edges);
+  assert.deepEqual(chainsOf(cyclic, edges, level).map((c) => c.taker), ['d']);
+});

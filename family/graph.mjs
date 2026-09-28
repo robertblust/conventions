@@ -72,9 +72,11 @@ export function stepsOf(repo, edges, level) {
 }
 
 export function chainsOf(pins, edges, level) {
-  const rank = (p) => level.get(p.taker) ?? Infinity;
+  const rank = (p) => level.get(p.taker);
   return pins
-    .filter((p) => p.status === 'behind')
+    // A taker on or above a cycle has no level to move at, so its pin starts no chain; the report
+    // names the cycle as what blocks it.
+    .filter((p) => p.status === 'behind' && level.get(p.taker) != null)
     .sort((a, b) => rank(a) - rank(b) || a.taker.localeCompare(b.taker) || a.upstream.localeCompare(b.upstream))
     .map((p, i) => ({ n: i + 1, taker: p.taker, kind: p.kind, file: p.file, upstream: p.upstream, available: p.available, steps: NON_PROPAGATING.has(p.kind) ? [[p.taker]] : stepsOf(p.taker, edges, level) }));
 }
