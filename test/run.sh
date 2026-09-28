@@ -589,4 +589,12 @@ then ok "check.yml's release and AGENTS.md's marker agree on $marker_version"
 else bad "check.yml declares $workflow_release, AGENTS.md's marker names $marker_version"
 fi
 
+# the check job judges a model-less member's pull request against its organization's instance
+yml=$HERE/.github/workflows/check.yml
+# shellcheck disable=SC2016 # literal workflow expression, not command substitution
+if grep -q 'fetch-depth: 0' "$yml" && grep -q 'repository: ${{ github.repository_owner }}/mental-model' "$yml" \
+  && grep -q "hashFiles('.companygraph/manifest.json') == ''" "$yml" && grep -q 'companygraph commits .governing-instance --range' "$yml" \
+  && grep -q 'COMPANYGRAPH_RELEASE: v0.60.0' "$yml"
+then ok "the check job judges a model-less member's commits against its organization's instance"; else bad "check.yml does not run the seat check for a member with no model"; fi
+
 if [ "$fails" -eq 0 ]; then echo "all pass"; else echo "$fails failing"; exit 1; fi
