@@ -30,3 +30,9 @@ test('the pull requests of a commit count only those from the repository itself,
   });
   assert.deepEqual(github.pullHeads('o/server', 's1'), ['resync-2026-09-28']);
 });
+
+test('a head or a compare GitHub does not find throws an error that names the repository and path', () => {
+  const github = answering({ 'repos/o/server/commits/main': null, 'repos/o/server/compare/v1.0.0...main': null });
+  assert.throws(() => github.head('o/server'), /o\/server.*repos\/o\/server\/commits\/main/);
+  assert.throws(() => github.compare('o/server', 'v1.0.0', 'main'), /o\/server.*repos\/o\/server\/compare\/v1\.0\.0\.\.\.main/);
+});

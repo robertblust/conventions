@@ -174,3 +174,20 @@ test('a commit message says what the member takes and what ran', () => {
   assert.equal(m.subject, 'Takes meta v2.0.0');
   assert.equal(m.full, 'Takes meta v2.0.0\n\nThe family resync moves o/meta in `package.json` from v1.0.0 to v2.0.0. The upstream notes are at um.\n\nVerified: `npm install` and `npm test` passed.\n');
 });
+
+test('a read GitHub fails for one member blocks that member, holds its downstream and lets the rest go on', () => {
+  const github = world();
+  github.files['o/tool'] = { 'package.json': '{"m":"github:o/meta#v1.0.0"}', 'pins.json': declare([npm('o/meta')]) };
+  const all = [...members, { repo: 'o/tool' }];
+  const report = assessFamily({ github, members: all, drawing: new Set([...drawing, 'o/tool>o/meta']), date: '2026-09-28' });
+  const file = github.file;
+  github.file = (repo, ...rest) => {
+    if (repo === 'o/server') throw new Error('gh api repos/o/server/contents/pins.json: HTTP 502');
+    return file(repo, ...rest);
+  };
+  const member = fakeMember(github);
+  const record = orchestrate({ report, selection: 'all', github, member, date: '2026-09-28' });
+  assert.deepEqual(record.map((r) => `${r.repo} ${r.status}`), ['o/server blocked', 'o/tool done', 'o/site held']);
+  assert.match(record[0].reason, /HTTP 502/);
+  assert.match(record[2].reason, /waits on o\/server/);
+});

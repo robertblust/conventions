@@ -22,6 +22,26 @@ export function parseArgs(argv) {
   return { file, selection, dryRun };
 }
 
+// Runs the choice and writes the record. A run that throws partway still writes the record of
+// what it did before it stopped, so the owner sees which members moved; a chain the report does
+// not hold stops the run before anything moved, and writes nothing.
+export function runResync({ report, selection, dryRun, github, member, date, outDir, log }) {
+  const record = [];
+  const write = () => {
+    mkdirSync(outDir, { recursive: true });
+    const out = join(outDir, `resync-run-${date}.md`);
+    writeFileSync(out, renderRecord(record, date, dryRun));
+    return out;
+  };
+  try {
+    orchestrate({ report, selection, github, member, date, log, record });
+  } catch (err) {
+    if (!err.message.startsWith('no chain')) console.error(`the run stopped; its record is at ${write()}`);
+    throw err;
+  }
+  return { out: write(), record };
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const args = parseArgs(process.argv.slice(2));
   if (!args) {
@@ -32,10 +52,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const date = today();
   if (report.date !== date) console.log(`the report is from ${report.date}; the run reads every member again before it moves it`);
   try {
-    const record = orchestrate({ report, selection: args.selection, github: realGithub(), member: realMember({ dryRun: args.dryRun }), date, log: console.log });
-    mkdirSync(join(HERE, 'dist'), { recursive: true });
-    const out = join(HERE, 'dist', `resync-run-${date}.md`);
-    writeFileSync(out, renderRecord(record, date, args.dryRun));
+    const { out, record } = runResync({ ...args, report, github: realGithub(), member: realMember({ dryRun: args.dryRun }), date, outDir: join(HERE, 'dist'), log: console.log });
     console.log(out);
     process.exit(record.some((r) => r.status === 'blocked') ? 1 : 0);
   } catch (err) {

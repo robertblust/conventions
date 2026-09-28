@@ -15,7 +15,7 @@ export const nextMinor = (tag) => {
   return `v${m[1]}.${Number(m[2]) + 1}.0`;
 };
 
-export function orchestrate({ report, selection, github, member, date, log = () => {} }) {
+export function orchestrate({ report, selection, github, member, date, log = () => {}, record = [] }) {
   const chosen = selection === 'all'
     ? report.chains
     : selection.map((n) => {
@@ -29,51 +29,50 @@ export function orchestrate({ report, selection, github, member, date, log = () 
   const levelOf = new Map(report.members.map((m) => [m.repo, m.level]));
   const family = new Set(report.members.map((m) => m.repo));
   const state = new Map();
-  const record = [];
   const holds = new Set(['blocked', 'held', 'unmanaged']);
   const top = Math.max(0, ...[...closure].map((r) => levelOf.get(r) ?? 0));
   for (let l = 1; l <= top; l++) {
     const cache = new Map();
     for (const repo of [...closure].filter((r) => levelOf.get(r) === l).sort()) {
-      const finish = (status, extra = {}) => {
-        state.set(repo, status);
-        record.push({ repo, status, ...extra });
-        log(`${repo}: ${status}${extra.reason ? ` — ${extra.reason}` : ''}`);
-      };
       const waits = report.edges.filter((e) => e.from === repo && holds.has(state.get(e.to))).map((e) => e.to);
-      if (waits.length) { finish('held', { reason: `waits on ${waits.join(', ')}` }); continue; }
-      const current = readMember(github, repo);
-      if (!current.declared) { finish('unmanaged', { reason: 'no pins.json' }); continue; }
-      const pins = assessPins(github, current, family, cache).filter((p) => p.status === 'behind' && (starts.has(pinKey(p)) || closure.has(p.upstream)));
-      const releasing = releasesIn(repo, closure, managedEdges);
-      if (!pins.length) {
-        if (releasing && pendingRelease(github, repo)) {
-          const unreleased = releaseBlock(github, repo);
-          if (unreleased) { finish('blocked', { reason: unreleased }); continue; }
-          try {
-            const release = member.release(repo, nextMinor(github.latestRelease(repo)?.tag), pendingNotes(), current.declared.release ?? [], { date }).tag;
-            finish('done', { release });
-          } catch (e) {
-            finish('blocked', { reason: e.message });
-          }
-          continue;
-        }
-        finish('skipped', { reason: 'nothing to move' });
-        continue;
-      }
-      const unreleased = releasing ? releaseBlock(github, repo) : null;
-      if (unreleased) { finish('blocked', { reason: unreleased }); continue; }
-      let landed;
+      // Anything that throws, a read of GitHub as much as a step of the member, blocks this member
+      // alone; what it landed before it threw stays in its record.
+      let landed = null;
+      let outcome;
       try {
-        landed = member.update(repo, pins, { date, verify: current.declared.verify ?? [] });
-        const release = releasing
-          ? member.release(repo, nextMinor(github.latestRelease(repo)?.tag), releaseNotes(pins), current.declared.release ?? [], { date }).tag
-          : null;
-        finish('done', { pr: landed.pr, merge: landed.merge, release, note: landed.note ?? null });
+        outcome = waits.length ? ['held', { reason: `waits on ${waits.join(', ')}` }] : advance(repo, cache, (l2) => { landed = l2; });
       } catch (e) {
-        finish('blocked', { reason: e.message, ...(landed ? { pr: landed.pr, merge: landed.merge } : {}) });
+        outcome = ['blocked', { reason: e.message, ...(landed ? { pr: landed.pr, merge: landed.merge } : {}) }];
       }
+      const [status, extra] = outcome;
+      state.set(repo, status);
+      record.push({ repo, status, ...extra });
+      log(`${repo}: ${status}${extra.reason ? ` — ${extra.reason}` : ''}`);
     }
   }
   return record;
+
+  function advance(repo, cache, landedWith) {
+    const current = readMember(github, repo);
+    if (!current.declared) return ['unmanaged', { reason: 'no pins.json' }];
+    const pins = assessPins(github, current, family, cache).filter((p) => p.status === 'behind' && (starts.has(pinKey(p)) || closure.has(p.upstream)));
+    const releasing = releasesIn(repo, closure, managedEdges);
+    if (!pins.length) {
+      if (releasing && pendingRelease(github, repo)) {
+        const unreleased = releaseBlock(github, repo);
+        if (unreleased) return ['blocked', { reason: unreleased }];
+        const release = member.release(repo, nextMinor(github.latestRelease(repo)?.tag), pendingNotes(), current.declared.release ?? [], { date }).tag;
+        return ['done', { release }];
+      }
+      return ['skipped', { reason: 'nothing to move' }];
+    }
+    const unreleased = releasing ? releaseBlock(github, repo) : null;
+    if (unreleased) return ['blocked', { reason: unreleased }];
+    const landed = member.update(repo, pins, { date, verify: current.declared.verify ?? [] });
+    landedWith(landed);
+    const release = releasing
+      ? member.release(repo, nextMinor(github.latestRelease(repo)?.tag), releaseNotes(pins), current.declared.release ?? [], { date }).tag
+      : null;
+    return ['done', { pr: landed.pr, merge: landed.merge, release, note: landed.note ?? null }];
+  }
 }
