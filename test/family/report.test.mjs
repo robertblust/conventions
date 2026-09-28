@@ -70,6 +70,30 @@ test('a member whose main only holds resync work gets a pending release chain', 
   assert.match(md, /has unreleased resync work/);
 });
 
+test('a member taken by tag only through an undeclared pin gets no pending chain', () => {
+  const github = fakeGithub({
+    files: {
+      'robertblust/conventions': { 'conventions.json': conv('v1.0.0') },
+      'robertblust/design': { 'conventions.json': conv('v1.0.0'), 'pins.json': declare(C) },
+      'robertblust/extra': { 'pins.json': declare() },
+      'robertblust/site': {
+        'conventions.json': conv('v1.0.0'),
+        'package.json': '{"d":"github:robertblust/design#v2.1.0","e":"github:robertblust/extra#v1.0.0"}',
+        'pins.json': declare(C, { kind: 'npm-tag', file: 'package.json', repo: 'robertblust/design' }),
+      },
+    },
+    releases: { 'robertblust/conventions': { tag: 'v1.0.0', url: 'u1' }, 'robertblust/design': { tag: 'v2.1.0', url: 'u2' }, 'robertblust/extra': { tag: 'v1.0.0', url: 'u3' } },
+    compares: { 'robertblust/extra:v1.0.0...main': { aheadBy: 1, shas: ['s1'], files: [] } },
+    pulls: { 'robertblust/extra:s1': ['resync-2026-09-28'] },
+  });
+  const extraMembers = ['robertblust/conventions', 'robertblust/design', 'robertblust/site', 'robertblust/extra'].map((repo) => ({ repo }));
+  const extraDrawing = new Set(['robertblust/site>robertblust/design', 'robertblust/site>robertblust/extra']);
+  const r = assessFamily({ github, members: extraMembers, drawing: extraDrawing, date: '2026-09-28' });
+  const m = Object.fromEntries(r.members.map((x) => [x.repo, x]));
+  assert.equal(m['robertblust/extra'].pending, false);
+  assert.ok(!r.chains.some((c) => c.kind === 'release' && c.taker === 'robertblust/extra'));
+});
+
 test('dates and lists read as the family writes them', () => {
   assert.equal(longDate('2026-09-28'), 'Sep 28, 2026');
   assert.equal(listed(['a', 'b', 'c']), 'a, b and c');

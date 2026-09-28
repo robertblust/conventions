@@ -37,7 +37,7 @@ export function assessFamily({ github, members, drawing, date }) {
   for (const cycle of cycles) for (const r of cycle) blocked.set(r, `on a cycle: ${cycle.join(' → ')}`);
   const takenByTag = new Set(edges.filter((e) => e.to !== CONVENTIONS && e.kinds.some((k) => TAG_KINDS.has(k))).map((e) => e.to));
   for (const r of takenByTag) {
-    if (blocked.has(r) || !managed.has(r)) continue;
+    if (blocked.has(r) || !managed.get(r)) continue;
     const reason = releaseBlock(github, r);
     if (reason) blocked.set(r, reason);
   }
@@ -47,9 +47,14 @@ export function assessFamily({ github, members, drawing, date }) {
   for (const p of pins) if (p.status === 'outside') problems.push({ type: 'outside', repo: p.taker, text: `pins ${p.upstream} in ${p.file}, which is not in the family` });
   // A member a later level takes by tag whose main holds only the run's own resync commits still
   // ahead of its last release has a release a rerun can finish, though nothing in it is behind.
+  // Only a declared pin is a promise the run can act on, so the edge that offers the chain is
+  // built from declared pins alone, unlike `takenByTag` above, which the blocked check keeps
+  // wide because an undeclared pin still leaves the upstream's own main unreleased.
+  const declaredEdges = edgesOf(pins.filter((p) => p.entry));
+  const takenByDeclaredTag = new Set(declaredEdges.filter((e) => e.to !== CONVENTIONS && e.kinds.some((k) => TAG_KINDS.has(k))).map((e) => e.to));
   const pending = new Set();
-  for (const r of takenByTag) {
-    if (blocked.has(r) || !managed.has(r)) continue;
+  for (const r of takenByDeclaredTag) {
+    if (blocked.has(r) || !managed.get(r)) continue;
     if (pendingRelease(github, r)) pending.add(r);
   }
   const chains = chainsOf(pins, edges, level);
