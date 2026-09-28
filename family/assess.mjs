@@ -88,19 +88,60 @@ export function assessPins(github, member, family, cache = new Map()) {
   return pins;
 }
 
+// A member others take by tag owes no release for what the run or the conventions sync wrote,
+// only for work a person did, and that work is what blocks it: a release the run cut over it
+// would carry notes no one wrote. A merge commit only carries the others, so it is not counted
+// either way; its content is in the commits it merged. A merge commit not from a `resync-` pull
+// request is therefore not counted, accepted because its merged commits are, though a conflict
+// resolved inside a merge is not seen. A commit that cannot be read counts as work, because
+// blocking is the side a wrong guess can be undone from, and so does every commit past the most
+// the compare lists, since it was never read at all.
 export function releaseBlock(github, repo) {
   const rel = github.latestRelease(repo);
   if (!rel) return 'has no release to follow';
   const c = github.compare(repo, rel.tag, 'main');
   if (c.aheadBy === 0) return null;
-  const ours = c.shas.every((sha) => github.pullHeads(repo, sha).some((h) => h.startsWith('resync-')));
-  return ours ? null : `unreleased work on main: ${plural(c.aheadBy, 'commit')} since ${rel.tag}`;
+  let work = Math.max(0, c.aheadBy - c.shas.length);
+  const unread = [];
+  for (const sha of c.shas) {
+    try {
+      if (github.pullHeads(repo, sha).some((h) => h.startsWith('resync-'))) continue;
+      const commit = github.commit(repo, sha);
+      if (commit.parents !== 1) continue;
+      if (!resyncOnly(github, repo, sha, commit)) work += 1;
+    } catch (e) {
+      work += 1;
+      unread.push(e.message);
+    }
+  }
+  if (work === 0) return null;
+  const why = unread.length ? `, ${plural(unread.length, 'commit')} could not be read: ${unread[0]}` : '';
+  return `unreleased work on main: ${plural(work, 'commit')} since ${rel.tag}${why}`;
 }
 
-// What the conventions sync writes into a member. A commit that touches nothing else is a
-// re-sync, a formality a release still owes but no one has to read.
+// What the conventions sync writes into a member, and the files beside it a member keeps by
+// hand that no consumer builds from: pins.json, the conventions workflow, the excludes in
+// conventions.json and CLAUDE.md. A commit that touches nothing else is a re-sync, a formality
+// a release still owes but no one has to read, so a hand edit to one of these files counts as
+// re-sync only by design.
 const VENDORED = new Set(['conventions.json', 'pins.json', 'AGENTS.md', 'CLAUDE.md', '.markdownlint-cli2.jsonc', '.github/workflows/conventions.yml']);
 export const isVendored = (path) => path.startsWith('conventions/') || VENDORED.has(path);
+
+// AGENTS.md is vendored only in its block; the rest of it is the member's own, so a commit that
+// changes the rest is work however little it changed.
+// The opening line is the sync's own form, OPEN_RE in conventions/conventions-sync.
+const CONVENTIONS_BLOCK = /^<!-- conventions · v[^ \n]* -->\n[\s\S]*?^<!-- end conventions -->$\n?/m;
+const ownText = (text) => (text ?? '').replace(CONVENTIONS_BLOCK, '');
+
+// Whether a commit only re-synced: it changed something, everything it changed is vendored, and
+// AGENTS.md, if it is among them, is the same outside the block as at its parent. A merge commit
+// never is. A caller that already read the commit passes it.
+export function resyncOnly(github, repo, sha, commit = github.commit(repo, sha)) {
+  const { parents, parent, files } = commit;
+  if (parents !== 1 || files.length === 0 || !files.every(isVendored)) return false;
+  if (!files.includes('AGENTS.md')) return true;
+  return ownText(github.file(repo, 'AGENTS.md', sha)) === ownText(github.file(repo, 'AGENTS.md', parent));
+}
 
 // The commits on main since the latest release, so the owner can tell a re-sync from real work
 // before deciding what to release. Merge commits are left out: they only carry the others. A
@@ -114,9 +155,9 @@ export function unreleasedCommits(github, repo) {
   const commits = [];
   try {
     for (const sha of c.shas) {
-      const { subject, parents, files } = github.commit(repo, sha);
-      if (parents !== 1) continue;
-      commits.push({ sha, subject, resyncOnly: files.length > 0 && files.every(isVendored) });
+      const commit = github.commit(repo, sha);
+      if (commit.parents !== 1) continue;
+      commits.push({ sha, subject: commit.subject, resyncOnly: resyncOnly(github, repo, sha, commit) });
     }
   } catch (e) {
     return { ...found, commits: null, error: e.message };

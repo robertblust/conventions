@@ -250,3 +250,20 @@ test('a member that moved only its conventions pin still finishes a release an e
   assert.equal(record.find((r) => r.repo === 'o/server').release, 'v1.1.0');
   assert.ok(member.calls.find((c) => c.repo === 'o/site').pins.includes('o/server@v1.1.0'));
 });
+
+test('a member whose main holds only re-sync-only commits is still released when a later level takes it', () => {
+  const github = world();
+  github.compares['o/server:v1.0.0...main'] = { aheadBy: 2, shas: ['s1', 'm1'], files: [] };
+  github.commits['o/server:s1'] = { subject: 'Takes conventions v1.35.0', parents: 1, parent: 'p1', files: ['conventions/WRITING.md', 'conventions.json'] };
+  github.commits['o/server:m1'] = { subject: 'Merge pull request #3', parents: 2, parent: 'p2', files: ['conventions/WRITING.md', 'conventions.json'] };
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  assert.equal(report.members.find((m) => m.repo === 'o/server').blocked, null);
+  const member = fakeMember(github);
+  const record = orchestrate({ report, selection: [pinChain(report, 'o/server')], github, member, date: '2026-09-28' });
+  assert.deepEqual(member.calls.map((c) => `${c.op} ${c.repo} ${c.pins?.join(',') ?? c.tag}`), [
+    'update o/server o/meta@v2.0.0',
+    'release o/server v1.1.0',
+    'update o/site o/server@v1.1.0',
+  ]);
+  assert.deepEqual(record.map((r) => `${r.repo} ${r.status}`), ['o/server done', 'o/site done']);
+});

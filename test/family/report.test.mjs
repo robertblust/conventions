@@ -131,7 +131,7 @@ test('a blocked member names its unreleased commits under its bullet, marking a 
   assert.equal(m['robertblust/design'].unreleased.compare, 'https://github.com/robertblust/design/compare/v2.1.0...main');
   assert.equal(m['robertblust/site'].unreleased, null);
   const md = renderReport(r);
-  assert.match(md, /- robertblust\/design: unreleased work on main: 2 commits since v2\.1\.0\n  - \[v2\.1\.0\.\.\.main\]\(https:\/\/github\.com\/robertblust\/design\/compare\/v2\.1\.0\.\.\.main\)\n  - s1 Takes conventions v1\.0\.0 \(re-sync only\)\n  - s2 Tokens \\\| spacing\n/);
+  assert.match(md, /- robertblust\/design: unreleased work on main: 1 commit since v2\.1\.0\n  - \[v2\.1\.0\.\.\.main\]\(https:\/\/github\.com\/robertblust\/design\/compare\/v2\.1\.0\.\.\.main\)\n  - s1 Takes conventions v1\.0\.0 \(re-sync only\)\n  - s2 Tokens \\\| spacing\n/);
 });
 
 test('the Main section names a red, running or unknown main', () => {
@@ -162,5 +162,21 @@ test('a commit the report cannot read leaves its list, not the report', () => {
   const m = Object.fromEntries(r.members.map((x) => [x.repo, x]));
   assert.deepEqual(m['robertblust/design'].unreleased, { since: 'v2.1.0', compare: 'https://github.com/robertblust/design/compare/v2.1.0...main', commits: null, error: 'HTTP 502' });
   const md = renderReport(r);
-  assert.match(md, /- robertblust\/design: unreleased work on main: 2 commits since v2\.1\.0\n  - \[v2\.1\.0\.\.\.main\]\(https:\/\/github\.com\/robertblust\/design\/compare\/v2\.1\.0\.\.\.main\)\n  - the commits could not be read: HTTP 502\n\n/);
+  assert.match(md, /- robertblust\/design: unreleased work on main: 2 commits since v2\.1\.0, 1 commit could not be read: HTTP 502\n  - \[v2\.1\.0\.\.\.main\]\(https:\/\/github\.com\/robertblust\/design\/compare\/v2\.1\.0\.\.\.main\)\n  - the commits could not be read: HTTP 502\n\n/);
+});
+
+test('the re-sync-only label follows the AGENTS.md rule', () => {
+  const github = world();
+  const block = '<!-- conventions · v1.0.0 -->\nShared.\n<!-- end conventions -->\n';
+  github.files['robertblust/design']['AGENTS.md@s1'] = block.replace('Shared.', 'Shared, newer.');
+  github.files['robertblust/design']['AGENTS.md@p1'] = block;
+  github.files['robertblust/design']['AGENTS.md@s2'] = `${block}Own words, changed.\n`;
+  github.files['robertblust/design']['AGENTS.md@p2'] = `${block}Own words.\n`;
+  github.commits['robertblust/design:s1'] = { subject: 'Takes conventions v1.0.0', parents: 1, parent: 'p1', files: ['AGENTS.md', 'conventions.json'] };
+  github.commits['robertblust/design:s2'] = { subject: 'Says more', parents: 1, parent: 'p2', files: ['AGENTS.md'] };
+  const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
+  const m = Object.fromEntries(r.members.map((x) => [x.repo, x]));
+  assert.equal(m['robertblust/design'].blocked, 'unreleased work on main: 1 commit since v2.1.0');
+  assert.deepEqual(m['robertblust/design'].unreleased.commits.map((c) => `${c.sha} ${c.resyncOnly}`), ['s1 true', 's2 false']);
+  assert.match(renderReport(r), /  - s1 Takes conventions v1\.0\.0 \(re-sync only\)\n  - s2 Says more\n/);
 });
