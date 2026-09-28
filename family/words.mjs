@@ -10,3 +10,18 @@ export const longDate = (iso) => {
   const [y, m, d] = iso.split('-').map(Number);
   return `${MONTHS[m - 1]} ${d}, ${y}`;
 };
+
+const moves = (pins) => listed(pins.map((p) => `${p.upstream} in \`${p.file}\` from ${p.pinned.map(shortV).join(', ')} to ${shortV(p.available)}`));
+
+export function commitMessage(pins, ran) {
+  const subject = `Takes ${listed([...new Set(pins.map((p) => `${p.upstream.split('/')[1]} ${shortV(p.available)}`))])}`;
+  const notes = [...new Set(pins.map((p) => p.url).filter(Boolean))];
+  const body = `The family resync moves ${moves(pins)}.${notes.length ? ` The upstream notes are at ${listed(notes)}.` : ''}`;
+  const verified = ran.length ? `Verified: ${listed(ran.map((c) => `\`${c}\``))} passed.` : 'Verified: the move needed no command.';
+  return { subject, body: `${body}\n\n${verified}`, full: `${subject}\n\n${body}\n\n${verified}\n` };
+}
+
+export function releaseNotes(pins) {
+  const notes = [...new Set(pins.map((p) => p.url).filter(Boolean))];
+  return `This release takes newer pins and changes nothing else: ${moves(pins)}.${notes.length ? ` Their notes are at ${listed(notes)}.` : ''}\n\nNothing breaks. A repository that takes this one re-pins it and changes nothing else.\n`;
+}
