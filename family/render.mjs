@@ -46,3 +46,13 @@ export function renderReport(data) {
   }
   return `${lines.join('\n').trimEnd()}\n`;
 }
+
+export function renderRecord(record, date, dryRun) {
+  const lines = [`# Family resync run, ${longDate(date)}${dryRun ? ' (dry run)' : ''}`, ''];
+  if (!record.length) return `${lines[0]}\n\nThe choice moved nothing.\n`;
+  lines.push('| Member | Status | Pull request | Merge | Release | Note |', '| --- | --- | --- | --- | --- | --- |');
+  for (const r of record) {
+    lines.push(`| ${r.repo} | ${r.status} | ${r.pr ?? ''} | ${r.merge ? shortV(r.merge) : ''} | ${r.release ?? ''} | ${cell(r.reason ?? r.note ?? '')} |`);
+  }
+  return `${lines.join('\n')}\n`;
+}
