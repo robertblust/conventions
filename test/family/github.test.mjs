@@ -36,3 +36,12 @@ test('a head or a compare GitHub does not find throws an error that names the re
   assert.throws(() => github.head('o/server'), /o\/server.*repos\/o\/server\/commits\/main/);
   assert.throws(() => github.compare('o/server', 'v1.0.0', 'main'), /o\/server.*repos\/o\/server\/compare\/v1\.0\.0\.\.\.main/);
 });
+
+test('a commit and main\'s check runs are read in the shape the report uses', () => {
+  const github = answering({
+    'repos/o/server/commits/s1': { commit: { message: 'Takes conventions v1.35.0\n\nThe body.' }, parents: [{ sha: 'p' }], files: [{ filename: 'conventions.json' }, { filename: 'conventions/WRITING.md' }] },
+    'repos/o/server/commits/main/check-runs?per_page=100': { total_count: 1, check_runs: [{ name: 'test', status: 'completed', conclusion: 'failure', id: 7 }] },
+  });
+  assert.deepEqual(github.commit('o/server', 's1'), { subject: 'Takes conventions v1.35.0', parents: 1, files: ['conventions.json', 'conventions/WRITING.md'] });
+  assert.deepEqual(github.checks('o/server'), [{ name: 'test', status: 'completed', conclusion: 'failure' }]);
+});

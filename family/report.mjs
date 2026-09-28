@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { parseMembers, parseDrawing } from './repositories.mjs';
-import { readMember, assessPins, releaseBlock, pendingRelease } from './assess.mjs';
+import { readMember, assessPins, releaseBlock, pendingRelease, unreleasedCommits, mainState } from './assess.mjs';
 import { edgesOf, levelsOf, chainsOf, stepsOf, CONVENTIONS, TAG_KINDS } from './graph.mjs';
 import { renderReport } from './render.mjs';
 import { realGithub } from './github.mjs';
@@ -21,10 +21,16 @@ export function assessFamily({ github, members, drawing, date }) {
   const pins = [];
   const managed = new Map();
   const problems = [];
+  const main = new Map();
   for (const repo of repos) {
     try {
       const member = readMember(github, repo);
       managed.set(repo, member.declared !== null);
+      try {
+        main.set(repo, mainState(github, repo));
+      } catch {
+        main.set(repo, { state: 'unknown', failing: [] });
+      }
       if (member.invalid) problems.push({ type: 'invalid', repo, text: `pins.json: ${member.invalid}` });
       pins.push(...assessPins(github, member, family, cache));
     } catch (e) {
@@ -34,12 +40,16 @@ export function assessFamily({ github, members, drawing, date }) {
   const edges = edgesOf(pins);
   const { level, cycles } = levelsOf(repos.filter((r) => managed.has(r)), edges);
   const blocked = new Map();
+  const unreleased = new Map();
   for (const cycle of cycles) for (const r of cycle) blocked.set(r, `on a cycle: ${cycle.join(' → ')}`);
   const takenByTag = new Set(edges.filter((e) => e.to !== CONVENTIONS && e.kinds.some((k) => TAG_KINDS.has(k))).map((e) => e.to));
   for (const r of takenByTag) {
     if (blocked.has(r) || !managed.get(r)) continue;
     const reason = releaseBlock(github, r);
-    if (reason) blocked.set(r, reason);
+    if (reason) {
+      blocked.set(r, reason);
+      unreleased.set(r, unreleasedCommits(github, r));
+    }
   }
   for (const e of edges) {
     if (e.to !== CONVENTIONS && !drawing.has(`${e.from}>${e.to}`)) problems.push({ type: 'undrawn', repo: e.from, text: `pins ${e.to}, which the drawing in REPOSITORIES.md does not show` });
@@ -65,7 +75,7 @@ export function assessFamily({ github, members, drawing, date }) {
   }
   return {
     date,
-    members: repos.map((repo) => ({ repo, level: level.get(repo) ?? null, managed: managed.get(repo) ?? false, blocked: blocked.get(repo) ?? null, pending: pending.has(repo) })),
+    members: repos.map((repo) => ({ repo, level: level.get(repo) ?? null, managed: managed.get(repo) ?? false, blocked: blocked.get(repo) ?? null, unreleased: unreleased.get(repo) ?? null, main: main.get(repo) ?? null, pending: pending.has(repo) })),
     pins,
     edges,
     chains,

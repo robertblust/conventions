@@ -1,5 +1,5 @@
-// The report as Markdown for a person: counts first, then one table per level, the chains a
-// resync can choose from, and what disagrees.
+// The report as Markdown for a person: counts first and what blocks, then whose main is not green,
+// then one table per level, the chains a resync can choose from, and what disagrees.
 import { shortV, longDate, plural } from './words.mjs';
 
 const cell = (s) => String(s).replace(/\|/g, '\\|').replace(/\n/g, ' ');
@@ -12,9 +12,24 @@ export function renderReport(data) {
   const blocked = data.members.filter((m) => m.blocked);
   if (blocked.length) {
     lines.push('Blocked:', '');
-    for (const m of blocked) lines.push(`- ${m.repo}: ${m.blocked}`);
+    for (const m of blocked) {
+      lines.push(`- ${m.repo}: ${m.blocked}`);
+      if (!m.unreleased) continue;
+      lines.push(`  - [${m.unreleased.since}...main](${m.unreleased.compare})`);
+      if (!m.unreleased.commits) lines.push(`  - the commits could not be read: ${cell(m.unreleased.error)}`);
+      for (const c of m.unreleased.commits ?? []) lines.push(`  - ${c.sha.slice(0, 7)} ${cell(c.subject)}${c.resyncOnly ? ' (re-sync only)' : ''}`);
+    }
     lines.push('');
   }
+  lines.push('## Main', '');
+  const unwell = data.members.filter((m) => m.main && !['green', 'none'].includes(m.main.state));
+  if (!unwell.length) lines.push("Every member's main is green.");
+  for (const m of unwell) {
+    if (m.main.state === 'red') lines.push(`- ${m.repo}: main is red (${m.main.failing.map(cell).join(', ')}), so the run will block here`);
+    else if (m.main.state === 'pending') lines.push(`- ${m.repo}: main's checks are still running`);
+    else lines.push(`- ${m.repo}: main's checks could not be read`);
+  }
+  lines.push('');
   const levels = [...new Set(data.members.map((m) => m.level).filter((l) => l !== null))].sort((a, b) => a - b);
   for (const l of levels) {
     const repos = data.members.filter((m) => m.level === l).map((m) => m.repo).sort();

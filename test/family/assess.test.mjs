@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readMember, assessPins, releaseBlock } from '../../family/assess.mjs';
+import { readMember, assessPins, releaseBlock, unreleasedCommits, isVendored, mainState } from '../../family/assess.mjs';
 import { fakeGithub } from './fake-github.mjs';
 
 const A = 'a'.repeat(40);
@@ -93,4 +93,45 @@ test('a core pin is behind when meta-model has a newer release than the tooling 
   });
   const [pin] = assessPins(gh, readMember(gh, 'robertblust/model'), new Set(['robertblust/model', 'companygraph/meta-model']));
   assert.deepEqual([pin.pinned, pin.available, pin.status], [['0.57.0'], '0.58.0', 'behind']);
+});
+
+test('unreleased commits name each non-merge commit since the release and whether it only re-synced', () => {
+  const gh = fakeGithub({
+    releases: { 'robertblust/design': { tag: 'v2.1.0', url: 'u2' } },
+    compares: { 'robertblust/design:v2.1.0...main': { aheadBy: 3, shas: ['s1', 'm1', 's2'], files: [] } },
+    commits: {
+      'robertblust/design:s1': { subject: 'Takes conventions v1.35.0', parents: 1, files: ['conventions/WRITING.md', 'conventions.json', '.markdownlint-cli2.jsonc'] },
+      'robertblust/design:m1': { subject: 'Merge pull request #9', parents: 2, files: ['tokens.css'] },
+      'robertblust/design:s2': { subject: 'Tokens gain a spacing scale', parents: 1, files: ['tokens.css', 'AGENTS.md'] },
+    },
+  });
+  assert.deepEqual(unreleasedCommits(gh, 'robertblust/design'), {
+    since: 'v2.1.0',
+    compare: 'https://github.com/robertblust/design/compare/v2.1.0...main',
+    commits: [
+      { sha: 's1', subject: 'Takes conventions v1.35.0', resyncOnly: true },
+      { sha: 's2', subject: 'Tokens gain a spacing scale', resyncOnly: false },
+    ],
+  });
+});
+
+test('there are no unreleased commits without a release or when main is not ahead', () => {
+  const gh = fakeGithub({ releases: { 'robertblust/design': { tag: 'v2.1.0', url: 'u2' } } });
+  assert.equal(unreleasedCommits(gh, 'robertblust/design'), null);
+  assert.equal(unreleasedCommits(gh, 'robertblust/model'), null);
+});
+
+test('a vendored path is one the conventions sync writes', () => {
+  for (const p of ['conventions/WRITING.md', 'conventions.json', 'pins.json', 'AGENTS.md', 'CLAUDE.md', '.markdownlint-cli2.jsonc', '.github/workflows/conventions.yml']) assert.equal(isVendored(p), true, p);
+  for (const p of ['README.md', 'docs/conventions/x.md', '.github/workflows/test.yml', 'src/AGENTS.md']) assert.equal(isVendored(p), false, p);
+});
+
+test('main is red, pending, none or green by its check runs', () => {
+  const run = (name, status, conclusion = null) => ({ name, status, conclusion });
+  const state = (runs) => mainState(fakeGithub({ checks: { 'o/r': runs } }), 'o/r');
+  assert.deepEqual(state([run('test', 'completed', 'failure'), run('conventions', 'completed', 'timed_out'), run('test', 'completed', 'failure'), run('build', 'in_progress'), run('lint', 'completed', 'success')]), { state: 'red', failing: ['conventions', 'test'] });
+  assert.deepEqual(state([run('x', 'completed', 'cancelled'), run('a', 'completed', 'action_required')]), { state: 'red', failing: ['a', 'x'] });
+  assert.deepEqual(state([run('test', 'completed', 'success'), run('build', 'queued')]), { state: 'pending', failing: [] });
+  assert.deepEqual(state([]), { state: 'none', failing: [] });
+  assert.deepEqual(state([run('test', 'completed', 'success'), run('skip', 'completed', 'skipped'), run('n', 'completed', 'neutral')]), { state: 'green', failing: [] });
 });
