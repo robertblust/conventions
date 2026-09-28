@@ -49,7 +49,7 @@ export const KINDS = {
   },
   'core-release': {
     byTag: true,
-    read: (text) => [JSON.parse(text).core?.version].filter(Boolean),
+    read: (text) => [JSON.parse(text).tooling].filter(Boolean),
     write: null,
     commands: [],
   },
@@ -76,7 +76,7 @@ export function discover(file, text) {
     if (file.endsWith('api/sources.json')) return as('contract-commit', [...text.matchAll(/"([\w.-]+\/[\w.-]+)@[0-9a-f]{7,40}:/g)].map((m) => m[1]));
     if (base === 'package.json') return as('npm-tag', [...text.matchAll(/"github:([\w.-]+\/[\w.-]+)#[^"]+"/g)].map((m) => m[1]));
     if (base === 'source.json' || base === 'api-sources.json') return as('source-commit', sourceObjects(JSON.parse(text)).map((o) => o.repo));
-    if (file === '.companygraph/manifest.json') return JSON.parse(text).core?.version ? as('core-release', ['companygraph/meta-model']) : [];
+    if (file === '.companygraph/manifest.json') return JSON.parse(text).tooling ? as('core-release', ['companygraph/meta-model']) : [];
   } catch {
     return [];
   }
