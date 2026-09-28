@@ -21,7 +21,7 @@ function setup({ email = 'test@example.com' } = {}) {
   const gitconfig = join(tmp, 'gitconfig');
   writeFileSync(gitconfig, email ? `[user]\n\temail = ${email}\n\tname = Test\n` : '');
   Object.assign(process.env, {
-    PATH: `${dirs.bin}:${process.env.PATH}`, GH_STUB_DIR: dirs.stub, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1',
+    PATH: `${dirs.bin}:${process.env.PATH}`, GH_STUB_DIR: dirs.stub, FAMILY_REMOTE: dirs.remote, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1',
     GH_STUB_FAIL_CHECKS: '', GH_STUB_LATE_CHECKS: '',
   });
   return dirs;

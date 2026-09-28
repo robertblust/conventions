@@ -22,7 +22,6 @@ export function realMember({
   checkWait = 10,
   checkTries = 30,
 } = {}) {
-  process.env.FAMILY_REMOTE = remote;
   const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   const sh = (cwd, cmd) => {
     try {
