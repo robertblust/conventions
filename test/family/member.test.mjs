@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { realMember, Blocked } from '../../family/member.mjs';
 
 const STUB = fileURLToPath(new URL('./gh-stub.mjs', import.meta.url));
+const NPM_STUB = fileURLToPath(new URL('./npm-stub.mjs', import.meta.url));
 const A = 'a'.repeat(40);
 const B = 'b'.repeat(40);
 const C = 'c'.repeat(40);
@@ -19,10 +20,12 @@ function setup({ email = 'test@example.com' } = {}) {
   for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
   writeFileSync(join(dirs.bin, 'gh'), `#!/bin/sh\nexec node ${JSON.stringify(STUB)} "$@"\n`);
   chmodSync(join(dirs.bin, 'gh'), 0o755);
+  writeFileSync(join(dirs.bin, 'npm'), `#!/bin/sh\nexec node ${JSON.stringify(NPM_STUB)} "$@"\n`);
+  chmodSync(join(dirs.bin, 'npm'), 0o755);
   const gitconfig = join(tmp, 'gitconfig');
   writeFileSync(gitconfig, email ? `[user]\n\temail = ${email}\n\tname = Test\n` : '');
   Object.assign(process.env, {
-    PATH: `${dirs.bin}:${process.env.PATH}`, GH_STUB_DIR: dirs.stub, FAMILY_REMOTE: dirs.remote, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1',
+    PATH: `${dirs.bin}:${process.env.PATH}`, GH_STUB_DIR: dirs.stub, NPM_STUB_DIR: dirs.stub, FAMILY_REMOTE: dirs.remote, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1',
     GH_STUB_FAIL_CHECKS: '', GH_STUB_LATE_CHECKS: '', GH_STUB_CLOSE: '', GH_STUB_FORK_PRS: '', GH_STUB_API: '', GH_STUB_AFTER_MERGE: '',
   });
   return dirs;
@@ -47,6 +50,7 @@ function seed(remote, repo, files) {
 const pin = { taker: 'o/site', kind: 'source-commit', file: 'source.json', upstream: 'o/model', pinned: [A], available: B, url: 'https://github.com/o/model', entry: { kind: 'source-commit', file: 'source.json', repo: 'o/model', after: ['echo built > built.txt'] } };
 const siteFiles = { 'source.json': `{"repo":"o/model","commit":"${A}"}\n` };
 const calls = (d) => readFileSync(join(d.stub, 'calls.log'), 'utf8');
+const npmCalls = (d) => (existsSync(join(d.stub, 'npm-calls.log')) ? readFileSync(join(d.stub, 'npm-calls.log'), 'utf8') : '');
 const member = (d, extra = {}) => realMember({ root: d.git, remote: d.remote, checkWait: 0, log: () => {}, ...extra });
 
 test('a member is moved, verified, merged and cleaned up', () => {
@@ -76,6 +80,23 @@ test('after a release bump merges, the clone\'s main follows origin/main', () =>
   member(d).release('o/server', 'v0.2.0', 'Notes.\n', ['printf "{version}\\n" > VERSION'], { date: '2026-09-28' });
   const dir = join(d.git, 'o/server');
   assert.equal(git(dir, 'rev-parse', 'main'), git(bare, 'rev-parse', 'main'));
+});
+
+test('a worktree with a lockfile and no node_modules installs before its verify commands run', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', { ...siteFiles, 'package-lock.json': '{}\n' });
+  const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: ['true'] });
+  assert.equal(out.pr, 'https://github.com/o/site/pull/1');
+  assert.match(npmCalls(d), /^ci$/m);
+  assert.match(git(bare, 'log', '-1', '--format=%B', 'main^2'), /Verified: `echo built > built\.txt`, `npm ci` and `true` passed\./);
+});
+
+test('a worktree that already has node_modules is not installed again', () => {
+  const d = setup();
+  seed(d.remote, 'o/site', { ...siteFiles, 'package-lock.json': '{}\n', 'node_modules/.keep': '' });
+  const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: ['true'] });
+  assert.equal(out.pr, 'https://github.com/o/site/pull/1');
+  assert.equal(npmCalls(d), '');
 });
 
 test('a failing verify blocks the member before anything is pushed', () => {
