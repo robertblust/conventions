@@ -241,12 +241,13 @@ export function realMember({
   }
 
   // The checks wait can return before every required check has registered, and GitHub then
-  // reports the pull request BLOCKED, UNKNOWN or UNSTABLE, or refuses the merge under the base
-  // branch policy, for as long as it takes the rest to report. So only CLEAN or HAS_HOOKS merges;
-  // any other state, and that refusal, is waited out and the checks watched again, a bounded
-  // number of times, and only then blocks with the last state named. BEHIND is not waiting:
-  // the branch takes main and the checks run again. DIRTY does not heal by waiting either: a
-  // conflict with main needs a person, so it blocks at once.
+  // reports the pull request BLOCKED or UNKNOWN, or refuses the merge under the base branch
+  // policy, for as long as it takes the rest to report. So CLEAN, HAS_HOOKS and UNSTABLE merge —
+  // UNSTABLE is every required check passed and only one the ruleset does not require failing
+  // or running — and any other state, DRAFT among them, and that refusal, is waited out and the
+  // checks watched again, a bounded number of times, and only then blocks with the last state
+  // named. BEHIND is not waiting: the branch takes main and the checks run again. DIRTY does not
+  // heal by waiting either: a conflict with main needs a person, so it blocks at once.
   const POLICY = /base branch policy prohibits the merge/i;
   function merge(repo, pr) {
     if (pr.state === 'MERGED') return { pr: pr.url, merge: pr.mergeCommit.oid };
@@ -262,7 +263,7 @@ export function realMember({
         continue;
       }
       if (mergeStateStatus === 'DIRTY') throw new Blocked(`pull request #${n} of ${repo} conflicts with main`);
-      if (mergeStateStatus === 'CLEAN' || mergeStateStatus === 'HAS_HOOKS') {
+      if (['CLEAN', 'HAS_HOOKS', 'UNSTABLE'].includes(mergeStateStatus)) {
         try {
           gh(['pr', 'merge', n, '--repo', repo, '--merge']);
           const done = JSON.parse(gh(['pr', 'view', n, '--repo', repo, '--json', 'url,mergeCommit']));
@@ -450,8 +451,9 @@ export function realMember({
           // A release branch reused from an earlier run the same day that already holds commits
           // beyond main holds the bump, pushed before that run was cut short; bumping again would
           // fail where a command refuses an unchanged version, so the run takes that branch on.
+          // A merge of main that `gh pr update-branch` left there is not a commit of its own.
           const made = hasNewCommit(wt);
-          if (made && git(wt, 'log', '--format=%s', 'origin/main..HEAD').split('\n').some((s) => s !== subject)) {
+          if (made && git(wt, 'log', '--no-merges', '--format=%s', 'origin/main..HEAD').split('\n').some((s) => s !== subject)) {
             throw new Blocked(`${branch} holds commits that are not the bump to ${version}`);
           }
           const ran = made ? [] : bump();

@@ -26,7 +26,7 @@ function setup({ email = 'test@example.com' } = {}) {
   writeFileSync(gitconfig, email ? `[user]\n\temail = ${email}\n\tname = Test\n` : '');
   Object.assign(process.env, {
     PATH: `${dirs.bin}:${process.env.PATH}`, GH_STUB_DIR: dirs.stub, NPM_STUB_DIR: dirs.stub, FAMILY_REMOTE: dirs.remote, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1',
-    GH_STUB_FAIL_CHECKS: '', GH_STUB_LATE_CHECKS: '', GH_STUB_CLOSE: '', GH_STUB_FORK_PRS: '', GH_STUB_API: '', GH_STUB_AFTER_MERGE: '', GH_STUB_BLOCKED: '', GH_STUB_POLICY: '', GH_STUB_DIRTY: '',
+    GH_STUB_FAIL_CHECKS: '', GH_STUB_LATE_CHECKS: '', GH_STUB_CLOSE: '', GH_STUB_FORK_PRS: '', GH_STUB_API: '', GH_STUB_AFTER_MERGE: '', GH_STUB_BLOCKED: '', GH_STUB_POLICY: '', GH_STUB_STATE: '',
   });
   return dirs;
 }
@@ -155,10 +155,23 @@ test('a pull request that stays BLOCKED past the tries blocks the member with th
   assert.doesNotMatch(calls(d), /pr merge/);
 });
 
+for (const status of ['UNSTABLE', 'HAS_HOOKS']) {
+  test(`a pull request reading ${status} merges on the first read`, () => {
+    const d = setup();
+    const bare = seed(d.remote, 'o/site', siteFiles);
+    process.env.GH_STUB_STATE = `o/site:${status}`;
+    const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+    assert.equal(out.pr, 'https://github.com/o/site/pull/1');
+    assert.equal(calls(d).match(/pr checks 1 /g).length, 1);
+    assert.equal(calls(d).match(/pr merge 1 /g).length, 1);
+    assert.match(git(bare, 'show', 'main:source.json'), new RegExp(B));
+  });
+}
+
 test('a pull request that conflicts with main blocks at once and is never merged', () => {
   const d = setup();
   seed(d.remote, 'o/site', siteFiles);
-  process.env.GH_STUB_DIRTY = 'o/site';
+  process.env.GH_STUB_STATE = 'o/site:DIRTY';
   assert.throws(
     () => member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] }),
     (e) => e instanceof Blocked && e.message === 'pull request #1 of o/site conflicts with main',
@@ -230,6 +243,33 @@ test('a rerun on the day\'s open release branch merges and tags the bump it hold
   const state = JSON.parse(readFileSync(join(d.stub, 'state.json'), 'utf8'));
   assert.equal(state.prs.length, 1);
   assert.equal(state.prs[0].state, 'MERGED');
+  assert.deepEqual(state.releases.map((r) => [r.tag, r.target]), [['v0.2.0', state.prs[0].merge]]);
+});
+
+test('a rerun takes a release branch holding the bump and a merge of main as bumped', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/server', { VERSION: '0.1.0\n' });
+  const bump = ['test "$(cat VERSION)" != "{version}" && printf "{version}\\n" > VERSION'];
+  const branch = 'resync-2026-09-28-release';
+  process.env.GH_STUB_FAIL_CHECKS = 'o/server';
+  assert.throws(() => member(d).release('o/server', 'v0.2.0', 'Notes.\n', bump, { date: '2026-09-28' }), /required check did not pass/);
+  // Main moves on, and `gh pr update-branch` merges it into the release branch.
+  const other = mkdtempSync(join(tmpdir(), 'other-'));
+  git(other, 'clone', '-q', bare, '.');
+  writeFileSync(join(other, 'later.txt'), 'later\n');
+  git(other, 'add', '-A');
+  git(other, '-c', 'user.email=o@x', '-c', 'user.name=o', 'commit', '-q', '-m', 'A later change on main');
+  git(other, 'push', '-q', 'origin', 'HEAD:main');
+  git(other, 'checkout', '-q', '-b', branch, `origin/${branch}`);
+  git(other, '-c', 'user.email=o@x', '-c', 'user.name=o', 'merge', '-q', '--no-ff', 'main', '-m', `Merge branch 'main' into ${branch}`);
+  git(other, 'push', '-q', 'origin', branch);
+  process.env.GH_STUB_FAIL_CHECKS = '';
+  const out = member(d).release('o/server', 'v0.2.0', 'Notes.\n', bump, { date: '2026-09-28' });
+  assert.equal(out.tag, 'v0.2.0');
+  assert.equal(git(bare, 'show', 'main:VERSION'), '0.2.0');
+  assert.equal(git(bare, 'show', 'main:later.txt'), 'later');
+  const state = JSON.parse(readFileSync(join(d.stub, 'state.json'), 'utf8'));
+  assert.equal(state.prs.length, 1);
   assert.deepEqual(state.releases.map((r) => [r.tag, r.target]), [['v0.2.0', state.prs[0].merge]]);
 });
 
