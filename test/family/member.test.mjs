@@ -66,6 +66,22 @@ test('a member is moved, verified, merged and cleaned up', () => {
   assert.equal(existsSync(join(d.git, 'o/site-resync-2026-09-28')), false);
 });
 
+test('after the member\'s pull request merges, the clone\'s main follows origin/main', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', siteFiles);
+  member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  const dir = join(d.git, 'o/site');
+  assert.equal(git(dir, 'rev-parse', 'main'), git(bare, 'rev-parse', 'main'));
+});
+
+test('after a release bump merges, the clone\'s main follows origin/main', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/server', { VERSION: '0.1.0\n' });
+  member(d).release('o/server', 'v0.2.0', 'Notes.\n', ['printf "{version}\\n" > VERSION'], { date: '2026-09-28' });
+  const dir = join(d.git, 'o/server');
+  assert.equal(git(dir, 'rev-parse', 'main'), git(bare, 'rev-parse', 'main'));
+});
+
 test('a worktree with a lockfile and no node_modules installs before its verify commands run', () => {
   const d = setup();
   const bare = seed(d.remote, 'o/site', { ...siteFiles, 'package-lock.json': '{}\n' });
