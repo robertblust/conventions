@@ -24,6 +24,17 @@ const forkPrs = (head) => (process.env.GH_STUB_FORK_PRS ?? '').split(',').filter
 // GH_STUB_API is a JSON object from an API path to its answer; a null answer is a 404.
 const api = process.env.GH_STUB_API ? JSON.parse(process.env.GH_STUB_API) : {};
 const listed = (name) => (process.env[name] ?? '').split(',').includes(repo);
+// GH_STUB_BLOCKED="repo:n,…" has that repository's pull request report BLOCKED for its first n
+// reads of mergeStateStatus, and GH_STUB_POLICY="repo:n,…" has GitHub refuse its first n merges
+// under the base branch policy: both what GitHub says while required checks are still registering.
+const count = (name) => Number((process.env[name] ?? '').split(',').find((e) => e.startsWith(`${repo}:`))?.slice(repo.length + 1) ?? 0);
+const once = (name) => {
+  state.seen ??= {};
+  const key = `${name}:${repo}`;
+  state.seen[key] = (state.seen[key] ?? 0) + 1;
+  save();
+  return state.seen[key] <= count(name);
+};
 const [a, b] = args;
 
 if (a === 'api' && Object.hasOwn(api, args[args.length - 1])) {
@@ -52,8 +63,14 @@ if (a === 'api' && Object.hasOwn(api, args[args.length - 1])) {
   }
   process.exit(listed('GH_STUB_FAIL_CHECKS') ? 1 : 0);
 } else if (a === 'pr' && b === 'view') {
-  console.log(JSON.stringify(view(pr())));
+  const answer = view(pr());
+  if (opt('--json').split(',').includes('mergeStateStatus') && once('GH_STUB_BLOCKED')) answer.mergeStateStatus = 'BLOCKED';
+  console.log(JSON.stringify(answer));
 } else if (a === 'pr' && b === 'merge') {
+  if (once('GH_STUB_POLICY')) {
+    console.error(`X Pull request ${repo}#${args[2]} is not mergeable: the base branch policy prohibits the merge.`);
+    process.exit(1);
+  }
   const p = pr();
   const work = mkdtempSync(join(tmpdir(), 'merge-'));
   git(work, 'clone', '-q', bare(repo), '.');
