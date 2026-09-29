@@ -245,7 +245,8 @@ export function realMember({
   // branch policy, for as long as it takes the rest to report. So only CLEAN or HAS_HOOKS merges;
   // any other state, and that refusal, is waited out and the checks watched again, a bounded
   // number of times, and only then blocks with the last state named. BEHIND is not waiting:
-  // the branch takes main and the checks run again.
+  // the branch takes main and the checks run again. DIRTY does not heal by waiting either: a
+  // conflict with main needs a person, so it blocks at once.
   const POLICY = /base branch policy prohibits the merge/i;
   function merge(repo, pr) {
     if (pr.state === 'MERGED') return { pr: pr.url, merge: pr.mergeCommit.oid };
@@ -260,6 +261,7 @@ export function realMember({
         gh(['pr', 'update-branch', n, '--repo', repo]);
         continue;
       }
+      if (mergeStateStatus === 'DIRTY') throw new Blocked(`pull request #${n} of ${repo} conflicts with main`);
       if (mergeStateStatus === 'CLEAN' || mergeStateStatus === 'HAS_HOOKS') {
         try {
           gh(['pr', 'merge', n, '--repo', repo, '--merge']);

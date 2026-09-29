@@ -64,7 +64,9 @@ if (a === 'api' && Object.hasOwn(api, args[args.length - 1])) {
   process.exit(listed('GH_STUB_FAIL_CHECKS') ? 1 : 0);
 } else if (a === 'pr' && b === 'view') {
   const answer = view(pr());
-  if (opt('--json').split(',').includes('mergeStateStatus') && once('GH_STUB_BLOCKED')) answer.mergeStateStatus = 'BLOCKED';
+  // GH_STUB_DIRTY="repo,…" has that repository's pull request conflict with main on every read.
+  if (listed('GH_STUB_DIRTY')) answer.mergeStateStatus = 'DIRTY';
+  else if (opt('--json').split(',').includes('mergeStateStatus') && once('GH_STUB_BLOCKED')) answer.mergeStateStatus = 'BLOCKED';
   console.log(JSON.stringify(answer));
 } else if (a === 'pr' && b === 'merge') {
   if (once('GH_STUB_POLICY')) {

@@ -26,7 +26,7 @@ function setup({ email = 'test@example.com' } = {}) {
   writeFileSync(gitconfig, email ? `[user]\n\temail = ${email}\n\tname = Test\n` : '');
   Object.assign(process.env, {
     PATH: `${dirs.bin}:${process.env.PATH}`, GH_STUB_DIR: dirs.stub, NPM_STUB_DIR: dirs.stub, FAMILY_REMOTE: dirs.remote, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1',
-    GH_STUB_FAIL_CHECKS: '', GH_STUB_LATE_CHECKS: '', GH_STUB_CLOSE: '', GH_STUB_FORK_PRS: '', GH_STUB_API: '', GH_STUB_AFTER_MERGE: '', GH_STUB_BLOCKED: '', GH_STUB_POLICY: '',
+    GH_STUB_FAIL_CHECKS: '', GH_STUB_LATE_CHECKS: '', GH_STUB_CLOSE: '', GH_STUB_FORK_PRS: '', GH_STUB_API: '', GH_STUB_AFTER_MERGE: '', GH_STUB_BLOCKED: '', GH_STUB_POLICY: '', GH_STUB_DIRTY: '',
   });
   return dirs;
 }
@@ -152,6 +152,18 @@ test('a pull request that stays BLOCKED past the tries blocks the member with th
     (e) => e instanceof Blocked && /pull request #1 of o\/site was still BLOCKED/.test(e.message),
   );
   assert.equal(calls(d).match(/pr checks 1 /g).length, 3);
+  assert.doesNotMatch(calls(d), /pr merge/);
+});
+
+test('a pull request that conflicts with main blocks at once and is never merged', () => {
+  const d = setup();
+  seed(d.remote, 'o/site', siteFiles);
+  process.env.GH_STUB_DIRTY = 'o/site';
+  assert.throws(
+    () => member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] }),
+    (e) => e instanceof Blocked && e.message === 'pull request #1 of o/site conflicts with main',
+  );
+  assert.equal(calls(d).match(/pr checks 1 /g).length, 1);
   assert.doesNotMatch(calls(d), /pr merge/);
 });
 
