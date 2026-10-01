@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readMember, assessPins, releaseBlock, unreleasedCommits, isVendored, resyncOnly, mainState } from '../../family/assess.mjs';
+import { readMember, assessPins, releaseBlock, unreleasedCommits, isVendored, resyncOnly, mainState, missingSteps } from '../../family/assess.mjs';
 import { fakeGithub } from './fake-github.mjs';
 
 const A = 'a'.repeat(40);
@@ -221,4 +221,53 @@ test('a marker that only looks like the block is not the block', () => {
   gh.files['robertblust/design']['AGENTS.md@local'] = '<!-- conventions-local -->\nNew notes.\n<!-- end conventions -->\n';
   gh.files['robertblust/design']['AGENTS.md@p-local'] = '<!-- conventions-local -->\nOld notes.\n<!-- end conventions -->\n';
   assert.equal(resyncOnly(gh, 'robertblust/design', 'local'), false);
+});
+
+// A member as readMember gives it: the declared pins.json and the package.json among its texts.
+const site = ({ pins = [], verify, scripts = {} } = {}) => ({
+  repo: 'robertblust/site',
+  declared: { pins, ...(verify ? { verify } : {}) },
+  invalid: null,
+  texts: { 'package.json': JSON.stringify({ scripts }) },
+});
+const DESIGN = { kind: 'npm-tag', file: 'package.json', repo: 'robertblust/design' };
+
+test('a check in verify whose writer no step runs is a missing step', () => {
+  const member = site({ pins: [{ ...DESIGN, after: ['npm run design'] }], verify: ['npm run sitemap:check'], scripts: { sitemap: 'x', 'sitemap:check': 'y' } });
+  assert.deepEqual(missingSteps(member), [{ check: 'sitemap:check', step: 'npm run sitemap' }]);
+});
+
+test('a writer a pin runs after its move is no missing step', () => {
+  const member = site({ pins: [{ ...DESIGN, after: ['npm run design', 'npm run sitemap'] }], verify: ['npm run sitemap:check'], scripts: { sitemap: 'x' } });
+  assert.deepEqual(missingSteps(member), []);
+});
+
+test('a check without a writer script is no missing step', () => {
+  const member = site({ pins: [DESIGN], verify: ['npm run pin:check'], scripts: { 'pin:check': 'y' } });
+  assert.deepEqual(missingSteps(member), []);
+});
+
+test('a writer a pin runs in its move is no missing step', () => {
+  const core = { kind: 'core-release', file: '.companygraph/manifest.json', repo: 'companygraph/meta-model', move: 'npx core {version} && npm run og' };
+  const member = site({ pins: [core], verify: ['npm run og:check'], scripts: { og: 'x' } });
+  assert.deepEqual(missingSteps(member), []);
+});
+
+test('only the whole command counts as the writer', () => {
+  const member = site({ pins: [{ ...DESIGN, after: ['npm run sitemap-x', 'npm run sitemap:check'] }], verify: ['npm run sitemap:check'], scripts: { sitemap: 'x', 'sitemap-x': 'z' } });
+  assert.deepEqual(missingSteps(member), [{ check: 'sitemap:check', step: 'npm run sitemap' }]);
+});
+
+test('a compound verify entry is read for every check in it, each named once', () => {
+  const member = site({
+    pins: [{ ...DESIGN, after: ['npm run design'] }],
+    verify: ['npm run verify && npx design links', 'npm run og:check && npm run sitemap:check', 'npm run sitemap:check'],
+    scripts: { verify: 'v', og: 'x', sitemap: 'y' },
+  });
+  assert.deepEqual(missingSteps(member), [{ check: 'og:check', step: 'npm run og' }, { check: 'sitemap:check', step: 'npm run sitemap' }]);
+});
+
+test('a member without pins.json or package.json has no missing step', () => {
+  assert.deepEqual(missingSteps({ ...site({ verify: ['npm run sitemap:check'], scripts: { sitemap: 'x' } }), declared: null }), []);
+  assert.deepEqual(missingSteps({ ...site({ verify: ['npm run sitemap:check'] }), texts: {} }), []);
 });

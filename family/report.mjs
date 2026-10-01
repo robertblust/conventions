@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { parseMembers, parseDrawing } from './repositories.mjs';
-import { readMember, assessPins, releaseBlock, pendingRelease, unreleasedCommits, mainState } from './assess.mjs';
+import { readMember, assessPins, missingSteps, releaseBlock, pendingRelease, unreleasedCommits, mainState } from './assess.mjs';
 import { edgesOf, levelsOf, chainsOf, stepsOf, CONVENTIONS, TAG_KINDS } from './graph.mjs';
 import { renderReport } from './render.mjs';
 import { realGithub } from './github.mjs';
@@ -32,6 +32,7 @@ export function assessFamily({ github, members, drawing, date }) {
         main.set(repo, { state: 'unknown', failing: [] });
       }
       if (member.invalid) problems.push({ type: 'invalid', repo, text: `pins.json: ${member.invalid}` });
+      for (const { check, step } of missingSteps(member)) problems.push({ type: 'missing-step', repo, text: `pins.json never runs \`${step}\`, which \`${check}\` in its verify checks` });
       pins.push(...assessPins(github, member, family, cache));
     } catch (e) {
       problems.push({ type: 'unreachable', repo, text: e.message });

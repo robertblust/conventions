@@ -24,6 +24,35 @@ export function readMember(github, repo) {
   return { repo, declared, invalid, texts };
 }
 
+// A check in a member's verify list that compares a generated file with what its writer would
+// write fails as soon as a move changes what that writer writes, unless a step the run takes
+// before verify runs the writer. So a verify entry's `npm run <name>:check`, where package.json
+// has a script `<name>` and no pin's `after` or `move` runs `npm run <name>` as a whole command,
+// is a step pins.json is missing. A script that runs the check from inside another script is not
+// seen.
+const WORD_END = '(?=$|[\\s;&|)])';
+const runs = (cmd, name) => new RegExp(`(^|[\\s;&|(])npm run ${name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}${WORD_END}`).test(cmd);
+export function missingSteps(member) {
+  const declared = member.declared;
+  const raw = member.texts?.['package.json'];
+  if (!declared || raw === undefined) return [];
+  let scripts;
+  try {
+    scripts = JSON.parse(raw).scripts ?? {};
+  } catch {
+    return [];
+  }
+  const steps = (declared.pins ?? []).flatMap((p) => [...(p.after ?? []), ...(p.move ? [p.move] : [])]);
+  const names = new Set();
+  for (const entry of declared.verify ?? []) {
+    for (const m of entry.matchAll(new RegExp(`(?:^|[\\s;&|(])npm run ([\\w.:-]+):check${WORD_END}`, 'g'))) names.add(m[1]);
+  }
+  return [...names]
+    .filter((name) => Object.hasOwn(scripts, name) && !steps.some((cmd) => runs(cmd, name)))
+    .sort()
+    .map((name) => ({ check: `${name}:check`, step: `npm run ${name}` }));
+}
+
 function offered(github, cache, kind, repo) {
   const key = `${kind}|${repo}`;
   if (!cache.has(key)) {
