@@ -6,6 +6,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { realMember, Blocked } from '../../family/member.mjs';
+import { recordPull, ownPulls, guardPulls, memberFor } from '../../family/resync.mjs';
 
 const STUB = fileURLToPath(new URL('./gh-stub.mjs', import.meta.url));
 const NPM_STUB = fileURLToPath(new URL('./npm-stub.mjs', import.meta.url));
@@ -491,4 +492,55 @@ test('a release bump is authored as the Implementer, and without the clone keeps
   const out2 = member(e).release('o/server', 'v0.2.0', 'Notes.\n', ['printf "{version}\\n" > VERSION'], { date: '2026-09-28' });
   assert.equal(out2.note, 'no clone of o/mental-model, so the commits carry the person\'s name');
   assert.match(authorAndMessage(bare2, 'main^2'), /^Test <test@example\.com>\n/);
+});
+
+// What a later run the same day reads to know its own pull requests, and whether it would refuse
+// to start beside the open ones.
+const ownDir = () => mkdtempSync(join(tmpdir(), 'own-'));
+const startsBeside = (outDir, date, repo, url) => () => guardPulls({ members: [{ repo }], own: ownPulls(outDir, date), force: false, list: () => [{ number: 1, headRefName: 'resync-x', url }], log: () => {} });
+
+test('a release bump pull request opened and then blocked is the next same-day run\'s own', () => {
+  const d = setup();
+  seed(d.remote, 'o/server', { VERSION: '0.1.0\n' });
+  process.env.GH_STUB_FAIL_CHECKS = 'o/server';
+  const outDir = ownDir();
+  assert.throws(() => member(d, { onPull: recordPull(outDir, '2026-09-28') }).release('o/server', 'v0.2.0', 'Notes.\n', ['printf "{version}\\n" > VERSION'], { date: '2026-09-28' }), /required check did not pass/);
+  assert.deepEqual([...ownPulls(outDir, '2026-09-28')], ['https://github.com/o/server/pull/1']);
+  assert.doesNotThrow(startsBeside(outDir, '2026-09-28', 'o/server', 'https://github.com/o/server/pull/1'));
+});
+
+test('a pull request opened by an update that then throws is the run\'s own', () => {
+  const d = setup();
+  seed(d.remote, 'o/site', siteFiles);
+  process.env.GH_STUB_FAIL_CHECKS = 'o/site';
+  const outDir = ownDir();
+  assert.throws(() => member(d, { onPull: recordPull(outDir, '2026-09-28') }).update('o/site', [pin], { date: '2026-09-28', verify: [] }), /required check did not pass/);
+  assert.deepEqual([...ownPulls(outDir, '2026-09-28')], ['https://github.com/o/site/pull/1']);
+});
+
+test('a pull request a later run adopts is recorded once', () => {
+  const d = setup();
+  seed(d.remote, 'o/site', siteFiles);
+  process.env.GH_STUB_FAIL_CHECKS = 'o/site';
+  const outDir = ownDir();
+  const run = () => member(d, { onPull: recordPull(outDir, '2026-09-28') }).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  assert.throws(run, /required check did not pass/);
+  assert.throws(run, /required check did not pass/);
+  assert.deepEqual(JSON.parse(readFileSync(join(outDir, 'resync-own-2026-09-28.json'), 'utf8')), ['https://github.com/o/site/pull/1']);
+});
+
+test('a dry run records no pull request', () => {
+  const d = setup();
+  seed(d.remote, 'o/site', siteFiles);
+  const outDir = ownDir();
+  memberFor({ dryRun: true, outDir, date: '2026-09-28', root: d.git, remote: d.remote, checkWait: 0, log: () => {} }).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  assert.equal(existsSync(join(outDir, 'resync-own-2026-09-28.json')), false);
+});
+
+test('a real run records the pull requests it opens', () => {
+  const d = setup();
+  seed(d.remote, 'o/site', siteFiles);
+  const outDir = ownDir();
+  memberFor({ dryRun: false, outDir, date: '2026-09-28', root: d.git, remote: d.remote, checkWait: 0, log: () => {} }).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  assert.deepEqual([...ownPulls(outDir, '2026-09-28')], ['https://github.com/o/site/pull/1']);
 });
