@@ -61,7 +61,22 @@ if (a === 'api' && Object.hasOwn(api, args[args.length - 1])) {
     console.error("no checks reported on the 'resync' branch");
     process.exit(1);
   }
-  process.exit(listed('GH_STUB_FAIL_CHECKS') ? 1 : 0);
+  // GH_STUB_FAIL_CHECKS="repo,…" fails that repository's checks on every read, and
+  // GH_STUB_FAIL_CHECKS_ONCE="repo,…" until a `run rerun` of it is made: a job that passes on rerun.
+  const failing = listed('GH_STUB_FAIL_CHECKS') || (listed('GH_STUB_FAIL_CHECKS_ONCE') && !(state.reruns ?? []).some((r) => r.repo === repo));
+  if (opt('--json')) {
+    const run = 1000 + Number(args[2]);
+    console.log(JSON.stringify([
+      { name: 'verify', bucket: failing ? 'fail' : 'pass', link: `https://github.com/${repo}/actions/runs/${run}/job/1` },
+      { name: 'conventions', bucket: 'pass', link: `https://github.com/${repo}/actions/runs/${run + 500}/job/2` },
+    ]));
+  } else {
+    process.exit(failing ? 1 : 0);
+  }
+} else if (a === 'run' && b === 'rerun') {
+  state.reruns ??= [];
+  state.reruns.push({ repo, run: args[2], failed: args.includes('--failed') });
+  save();
 } else if (a === 'pr' && b === 'view') {
   const answer = view(pr());
   // GH_STUB_STATE="repo:STATE,…" has that repository's pull request report STATE on every read.

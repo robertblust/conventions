@@ -280,3 +280,17 @@ test('a note from a release bump reaches the run record once, beside the update\
   const record = orchestrate({ report, selection: [chain], github, member, date: '2026-09-28' });
   assert.equal(record.find((r) => r.repo === 'o/server').note, personal);
 });
+
+test('a member that went through on a retry is done, and its record names each retry', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const chain = report.chains.find((c) => c.taker === 'o/server').n;
+  const member = fakeMember(github);
+  const { update, release } = member;
+  member.update = (...a) => ({ ...update(...a), retries: ['`npm test` failed once (fetch failed), passed on retry'] });
+  member.release = (...a) => ({ ...release(...a), retries: ['the required check `verify` failed once, passed on rerun'] });
+  const record = orchestrate({ report, selection: [chain], github, member, date: '2026-09-28' });
+  const server = record.find((r) => r.repo === 'o/server');
+  assert.equal(server.status, 'done');
+  assert.deepEqual(server.retries, ['`npm test` failed once (fetch failed), passed on retry', 'the required check `verify` failed once, passed on rerun']);
+});

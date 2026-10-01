@@ -27,7 +27,7 @@ function setup({ email = 'test@example.com' } = {}) {
   writeFileSync(gitconfig, email ? `[user]\n\temail = ${email}\n\tname = Test\n` : '');
   Object.assign(process.env, {
     PATH: `${dirs.bin}:${process.env.PATH}`, GH_STUB_DIR: dirs.stub, NPM_STUB_DIR: dirs.stub, FAMILY_REMOTE: dirs.remote, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1',
-    GH_STUB_FAIL_CHECKS: '', GH_STUB_LATE_CHECKS: '', GH_STUB_CLOSE: '', GH_STUB_FORK_PRS: '', GH_STUB_API: '', GH_STUB_AFTER_MERGE: '', GH_STUB_BLOCKED: '', GH_STUB_POLICY: '', GH_STUB_STATE: '',
+    GH_STUB_FAIL_CHECKS: '', GH_STUB_LATE_CHECKS: '', GH_STUB_CLOSE: '', GH_STUB_FORK_PRS: '', GH_STUB_API: '', GH_STUB_AFTER_MERGE: '', GH_STUB_BLOCKED: '', GH_STUB_POLICY: '', GH_STUB_STATE: '', GH_STUB_FAIL_CHECKS_ONCE: '',
   });
   return dirs;
 }
@@ -52,7 +52,7 @@ const pin = { taker: 'o/site', kind: 'source-commit', file: 'source.json', upstr
 const siteFiles = { 'source.json': `{"repo":"o/model","commit":"${A}"}\n` };
 const calls = (d) => readFileSync(join(d.stub, 'calls.log'), 'utf8');
 const npmCalls = (d) => (existsSync(join(d.stub, 'npm-calls.log')) ? readFileSync(join(d.stub, 'npm-calls.log'), 'utf8') : '');
-const member = (d, extra = {}) => realMember({ root: d.git, remote: d.remote, checkWait: 0, log: () => {}, ...extra });
+const member = (d, extra = {}) => realMember({ root: d.git, remote: d.remote, checkWait: 0, retryWait: 0, log: () => {}, ...extra });
 
 test('a member is moved, verified, merged and cleaned up', () => {
   const d = setup();
@@ -98,6 +98,91 @@ test('a worktree that already has node_modules is not installed again', () => {
   const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: ['true'] });
   assert.equal(out.pr, 'https://github.com/o/site/pull/1');
   assert.equal(npmCalls(d), '');
+});
+
+// A command that fails the first time it runs, saying `said` on stderr, and passes after: what a
+// download cut off or a render timed out under load does. Its count sits outside the worktree.
+const flaky = (d, name, said) => `if [ -f ${JSON.stringify(join(d.stub, name))} ]; then true; else touch ${JSON.stringify(join(d.stub, name))}; echo ${JSON.stringify(said)} >&2; exit 1; fi`;
+
+test('a step that fails once and passes on its second try goes on, and the member records the retry', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', siteFiles);
+  const step = flaky(d, 'after', 'TimeoutError: rendering page cards');
+  const out = member(d).update('o/site', [{ ...pin, entry: { ...pin.entry, after: [step] } }], { date: '2026-09-28', verify: [] });
+  assert.equal(out.pr, 'https://github.com/o/site/pull/1');
+  assert.deepEqual(out.retries, [`\`${step}\` failed once (TimeoutError: rendering page cards), passed on retry`]);
+  assert.match(git(bare, 'show', 'main:source.json'), new RegExp(B));
+});
+
+test('a step that fails twice blocks the member, naming what both tries said', () => {
+  const d = setup();
+  seed(d.remote, 'o/site', siteFiles);
+  const step = 'n=$(cat ../tries 2>/dev/null || echo 0); n=$((n+1)); echo $n > ../tries; echo "curl: (35) try $n" >&2; exit 1';
+  assert.throws(
+    () => member(d).update('o/site', [{ ...pin, entry: { ...pin.entry, after: [step] } }], { date: '2026-09-28', verify: [] }),
+    (e) => e instanceof Blocked && e.message.startsWith(`\`${step}\` failed twice`) && /curl: \(35\) try 1/.test(e.message) && /curl: \(35\) try 2/.test(e.message),
+  );
+  assert.doesNotMatch(calls(d), /pr create/);
+});
+
+test('a verify entry that fails once is tried again and the member goes on', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', siteFiles);
+  const check = flaky(d, 'verify', 'fetch failed');
+  const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [check] });
+  assert.equal(out.pr, 'https://github.com/o/site/pull/1');
+  assert.deepEqual(out.retries, [`\`${check}\` failed once (fetch failed), passed on retry`]);
+  assert.equal(git(bare, 'show', 'main:built.txt'), 'built');
+});
+
+test('a release command that fails once is tried again and the release goes on', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/server', { VERSION: '0.1.0\n' });
+  const out = member(d).release('o/server', 'v0.2.0', 'Notes.\n', [flaky(d, 'bump', 'fetch failed'), 'printf "{version}\\n" > VERSION'], { date: '2026-09-28' });
+  assert.equal(out.tag, 'v0.2.0');
+  assert.equal(out.retries.length, 1);
+  assert.match(out.retries[0], /failed once \(fetch failed\), passed on retry$/);
+  assert.equal(git(bare, 'show', 'main:VERSION'), '0.2.0');
+});
+
+test('a member waits retryWait seconds before it tries a failed step again', () => {
+  const d = setup();
+  seed(d.remote, 'o/site', siteFiles);
+  const started = Date.now();
+  member(d, { retryWait: 1 }).update('o/site', [pin], { date: '2026-09-28', verify: [flaky(d, 'wait', 'x')] });
+  assert.ok(Date.now() - started >= 1000);
+});
+
+test('an update that needs no retry records none', () => {
+  const d = setup();
+  seed(d.remote, 'o/site', siteFiles);
+  assert.deepEqual(member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] }).retries, []);
+});
+
+test('a required check that fails once has its failed jobs rerun, and the pull request merges', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', siteFiles);
+  process.env.GH_STUB_FAIL_CHECKS_ONCE = 'o/site';
+  const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
+  assert.equal(out.pr, 'https://github.com/o/site/pull/1');
+  assert.match(calls(d), /^pr checks 1 --repo o\/site --json name,bucket,link$/m);
+  assert.match(calls(d), /^run rerun 1001 --repo o\/site --failed$/m);
+  assert.equal(calls(d).match(/run rerun/g).length, 1);
+  assert.match(calls(d), /pr merge 1 --repo o\/site --merge/);
+  assert.deepEqual(out.retries, ['the required check `verify` failed once, passed on rerun']);
+  assert.match(git(bare, 'show', 'main:source.json'), new RegExp(B));
+});
+
+test('a required check that fails again after its rerun blocks the member, naming the check', () => {
+  const d = setup();
+  seed(d.remote, 'o/site', siteFiles);
+  process.env.GH_STUB_FAIL_CHECKS = 'o/site';
+  assert.throws(
+    () => member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] }),
+    (e) => e instanceof Blocked && /required check did not pass on pull request #1 of o\/site/.test(e.message) && /`verify` failed again after a rerun/.test(e.message),
+  );
+  assert.equal(calls(d).match(/run rerun/g).length, 1);
+  assert.doesNotMatch(calls(d), /pr merge/);
 });
 
 test('a failing verify blocks the member before anything is pushed', () => {
@@ -484,7 +569,7 @@ test('a release bump is authored as the Implementer, and without the clone keeps
   const d = setup();
   const bare = seed(d.remote, 'o/server', { VERSION: '0.1.0\n', 'conventions/REPOSITORIES.md': listing(instance(d)) });
   const out = member(d).release('o/server', 'v0.2.0', 'Notes.\n', ['printf "{version}\\n" > VERSION'], { date: '2026-09-28' });
-  assert.deepEqual(out, { tag: 'v0.2.0', note: null });
+  assert.deepEqual(out, { tag: 'v0.2.0', note: null, retries: [] });
   assert.match(authorAndMessage(bare, 'main^2'), /^Implementer <implementer@example\.org>\n[\s\S]*\n\nProcess: Delivery\nPhase: Implement\nTrack: Code$/);
 
   const e = setup();

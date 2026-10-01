@@ -56,6 +56,15 @@ test('the run record has a row per member', () => {
   assert.match(md, /\| o\/site \| held \| {2}\| {2}\| {2}\| waits on o\/server \|/);
 });
 
+test('the run record names each retry in the Note column', () => {
+  const md = renderRecord([
+    { repo: 'o/server', status: 'done', pr: 'https://x/1', merge: 'a'.repeat(40), release: 'v1.1.0', note: 'a note', retries: ['`npm run og` failed once (TimeoutError), passed on retry', 'the required check `verify` failed once, passed on rerun'] },
+    { repo: 'o/site', status: 'done', pr: 'https://x/2', merge: 'b'.repeat(40), note: null, retries: ['`curl x` failed once, passed on retry'] },
+  ], '2026-09-28', false);
+  assert.match(md, /\| o\/server \| done \| https:\/\/x\/1 \| aaaaaaa \| v1\.1\.0 \| a note; `npm run og` failed once \(TimeoutError\), passed on retry; the required check `verify` failed once, passed on rerun \|/);
+  assert.match(md, /\| o\/site \| done \| https:\/\/x\/2 \| bbbbbbb \| {2}\| `curl x` failed once, passed on retry \|/);
+});
+
 test('a run that moved nothing says so', () => {
   assert.match(renderRecord([], '2026-09-28', true), /^# Family resync run, Sep 28, 2026 \(dry run\)\n\nThe choice moved nothing\.\n$/);
 });
