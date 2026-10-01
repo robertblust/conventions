@@ -87,4 +87,4 @@ A pin is an editorial line, moved on purpose. Which release each member is on is
 
 ## Re-syncing after a release
 
-The family resync moves the members that take a release, when the owner starts it: the README's section on keeping the family in step says how, and the report it writes says which members move. The run computes the order from the pins, each member after what it takes, so this file keeps none.
+The family resync moves the members that take a release, when the owner starts it: the README of robertblust/conventions says how, in its section on keeping the family in step, and the report the resync writes says which members move. The run computes the order from the pins, each member after what it takes, so this file keeps none.
