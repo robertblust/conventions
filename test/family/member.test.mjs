@@ -165,8 +165,11 @@ test('a required check that fails once has its failed jobs rerun, and the pull r
   process.env.GH_STUB_FAIL_CHECKS_ONCE = 'o/site';
   const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: [] });
   assert.equal(out.pr, 'https://github.com/o/site/pull/1');
-  assert.match(calls(d), /^pr checks 1 --repo o\/site --json name,bucket,link$/m);
+  assert.match(calls(d), /^pr checks 1 --repo o\/site --required --json name,bucket,link$/m);
   assert.match(calls(d), /^run rerun 1001 --repo o\/site --failed$/m);
+  // The first read after the rerun still shows the failure from before it, and is read past.
+  assert.ok(calls(d).match(/^pr checks 1 --repo o\/site --required --json name,bucket$/gm).length >= 2);
+  assert.doesNotMatch(calls(d), /run rerun 2001/);
   assert.equal(calls(d).match(/run rerun/g).length, 1);
   assert.match(calls(d), /pr merge 1 --repo o\/site --merge/);
   assert.deepEqual(out.retries, ['the required check `verify` failed once, passed on rerun']);

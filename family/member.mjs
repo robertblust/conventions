@@ -250,10 +250,26 @@ export function realMember({
   // The checks of a pull request that failed, and the workflow runs they belong to, read from
   // the run id each check's link names; a check whose link names no run cannot be rerun.
   function failingChecks(repo, number) {
-    const checks = JSON.parse(gh(['pr', 'checks', String(number), '--repo', repo, '--json', 'name,bucket,link']));
+    const checks = JSON.parse(gh(['pr', 'checks', String(number), '--repo', repo, '--required', '--json', 'name,bucket,link']));
     const failed = checks.filter((c) => c.bucket === 'fail');
     const runs = [...new Set(failed.map((c) => c.link?.match(/\/runs\/(\d+)/)?.[1]).filter(Boolean))];
     return { names: [...new Set(failed.map((c) => c.name))], runs };
+  }
+
+  // GitHub queues a rerun, so a read made at once can still show the failure from before it. The
+  // run waits until none of the rerun checks reads `fail`, a bounded number of times, and only
+  // then watches the checks to their end.
+  function rerunStarted(repo, number, names) {
+    for (let i = 0; i < checkTries; i++) {
+      execFileSync('sleep', [String(checkWait)]);
+      let checks;
+      try {
+        checks = JSON.parse(gh(['pr', 'checks', String(number), '--repo', repo, '--required', '--json', 'name,bucket']));
+      } catch {
+        continue;
+      }
+      if (!checks.some((c) => names.includes(c.name) && c.bucket === 'fail')) return;
+    }
   }
   const named = (names) => listed(names.map((n) => `\`${n}\``));
 
@@ -292,6 +308,7 @@ export function realMember({
         }
         rerun.done = true;
         rerun.pending = named(failing.names);
+        rerunStarted(repo, number, failing.names);
         i = -1;
       }
     }
