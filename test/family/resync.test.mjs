@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parseArgs, runResync, cleanDryRuns } from '../../family/resync.mjs';
+import { parseArgs, runResync, cleanDryRuns, lockRun, withLock, guardPulls, listResyncPulls } from '../../family/resync.mjs';
 import { assessFamily } from '../../family/report.mjs';
 import { KINDS } from '../../family/pins.mjs';
 import { fakeGithub } from './fake-github.mjs';
@@ -13,8 +13,9 @@ import { renderRecord } from '../../family/render.mjs';
 const git = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' }).trim();
 
 test('the choice is all or chain numbers, with an optional dry run', () => {
-  assert.deepEqual(parseArgs(['r.json', 'all']), { file: 'r.json', selection: 'all', dryRun: false });
-  assert.deepEqual(parseArgs(['r.json', '3', '5', '--dry-run']), { file: 'r.json', selection: [3, 5], dryRun: true });
+  assert.deepEqual(parseArgs(['r.json', 'all']), { file: 'r.json', selection: 'all', dryRun: false, force: false });
+  assert.deepEqual(parseArgs(['r.json', '3', '5', '--dry-run']), { file: 'r.json', selection: [3, 5], dryRun: true, force: false });
+  assert.deepEqual(parseArgs(['r.json', 'all', '--force']), { file: 'r.json', selection: 'all', dryRun: false, force: true });
   assert.equal(parseArgs(['r.json']), null);
   assert.equal(parseArgs(['r.json', 'x']), null);
   assert.equal(parseArgs(['r.json', '0']), null);
@@ -86,4 +87,70 @@ test('a chain the report does not hold writes no record', () => {
   const outDir = mkdtempSync(join(tmpdir(), 'resync-'));
   assert.throws(() => runResync({ report, selection: [7], dryRun: false, github, member: {}, date: '2026-09-28', outDir, log: () => {} }), /no chain 7/);
   assert.equal(existsSync(join(outDir, 'resync-run-2026-09-28.md')), false);
+});
+
+const lockPath = () => join(mkdtempSync(join(tmpdir(), 'resync-lock-')), 'dist', 'resync.lock');
+const deadPid = () => spawnSync('true').pid;
+
+test('a lock whose run is alive refuses, naming its pid and start', () => {
+  const path = lockPath();
+  mkdirSync(join(path, '..'), { recursive: true });
+  writeFileSync(path, JSON.stringify({ pid: process.pid, started: '2026-10-01T08:00:00.000Z', args: ['r.json', 'all'] }));
+  assert.throws(() => lockRun({ path, args: ['r.json', '1'], pid: 999999, log: () => {} }), (e) => e.refused && new RegExp(`pid ${process.pid}, started 2026-10-01T08:00:00.000Z`).test(e.message));
+  assert.equal(JSON.parse(readFileSync(path, 'utf8')).pid, process.pid);
+});
+
+test('a lock whose run is gone is taken over, and the run says so', () => {
+  const path = lockPath();
+  mkdirSync(join(path, '..'), { recursive: true });
+  const dead = deadPid();
+  writeFileSync(path, JSON.stringify({ pid: dead, started: '2026-09-30T08:00:00.000Z', args: ['r.json', 'all'] }));
+  const said = [];
+  const release = lockRun({ path, args: ['r.json', 'all'], log: (m) => said.push(m) });
+  const held = JSON.parse(readFileSync(path, 'utf8'));
+  assert.equal(held.pid, process.pid);
+  assert.deepEqual(held.args, ['r.json', 'all']);
+  assert.match(held.started, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(said.join('\n'), new RegExp(`took over .*pid ${dead}`));
+  release();
+  assert.equal(existsSync(path), false);
+});
+
+test('the lock is gone after a run that ends and after one that throws', () => {
+  const path = lockPath();
+  assert.equal(withLock({ path, args: ['r.json', 'all'], log: () => {} }, () => { assert.equal(existsSync(path), true); return 7; }), 7);
+  assert.equal(existsSync(path), false);
+  assert.throws(() => withLock({ path, args: ['r.json', 'all'], log: () => {} }, () => { throw new Error('the run broke'); }), /the run broke/);
+  assert.equal(existsSync(path), false);
+});
+
+const pullsOf = (open) => (repo) => open[repo] ?? [];
+const members = [{ repo: 'companygraph/chat-server' }, { repo: 'o/site' }];
+
+test('an open pull request on an older resync branch refuses, naming it and --force', () => {
+  const list = pullsOf({ 'companygraph/chat-server': [{ number: 64, headRefName: 'resync-2026-09-29-release', url: 'u64' }] });
+  assert.throws(() => guardPulls({ members, date: '2026-10-01', force: false, list, log: () => {} }), (e) => e.refused
+    && /companygraph\/chat-server #64 resync-2026-09-29-release is open/.test(e.message) && /--force/.test(e.message));
+});
+
+test('a pull request this run would reuse today does not refuse', () => {
+  const list = pullsOf({
+    'companygraph/chat-server': [{ number: 70, headRefName: 'resync-2026-10-01', url: 'u' }, { number: 71, headRefName: 'resync-2026-10-01-release', url: 'u' }],
+    'o/site': [{ number: 3, headRefName: 'resync-vendored-2026-10-01', url: 'u' }],
+  });
+  assert.doesNotThrow(() => guardPulls({ members, date: '2026-10-01', force: false, list, log: () => {} }));
+});
+
+test('--force runs beside an older resync pull request and says so', () => {
+  const list = pullsOf({ 'o/site': [{ number: 9, headRefName: 'resync-vendored-2026-09-30', url: 'u' }] });
+  const said = [];
+  assert.doesNotThrow(() => guardPulls({ members, date: '2026-10-01', force: true, list, log: (m) => said.push(m) }));
+  assert.match(said.join('\n'), /o\/site #9 resync-vendored-2026-09-30 is open/);
+});
+
+test('the open pull requests are asked of gh and only resync branches kept', () => {
+  const calls = [];
+  const run = (args) => { calls.push(args); return JSON.stringify([{ number: 1, headRefName: 'resync-2026-09-29', url: 'a' }, { number: 2, headRefName: 'a-feature', url: 'b' }]); };
+  assert.deepEqual(listResyncPulls('o/site', run), [{ number: 1, headRefName: 'resync-2026-09-29', url: 'a' }]);
+  assert.deepEqual(calls, [['pr', 'list', '--repo', 'o/site', '--state', 'open', '--json', 'number,headRefName,url']]);
 });
