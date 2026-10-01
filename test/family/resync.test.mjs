@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parseArgs, runResync, cleanDryRuns, lockRun, withLock, guardPulls, listResyncPulls } from '../../family/resync.mjs';
+import { parseArgs, runResync, cleanDryRuns, lockRun, withLock, guardPulls, listResyncPulls, ownPulls } from '../../family/resync.mjs';
 import { assessFamily } from '../../family/report.mjs';
 import { KINDS } from '../../family/pins.mjs';
 import { fakeGithub } from './fake-github.mjs';
@@ -126,25 +126,31 @@ test('the lock is gone after a run that ends and after one that throws', () => {
 
 const pullsOf = (open) => (repo) => open[repo] ?? [];
 const members = [{ repo: 'companygraph/chat-server' }, { repo: 'o/site' }];
+const guard = (list, own, force = false, log = () => {}) => () => guardPulls({ members, own, force, list, log });
 
 test('an open pull request on an older resync branch refuses, naming it and --force', () => {
   const list = pullsOf({ 'companygraph/chat-server': [{ number: 64, headRefName: 'resync-2026-09-29-release', url: 'u64' }] });
-  assert.throws(() => guardPulls({ members, date: '2026-10-01', force: false, list, log: () => {} }), (e) => e.refused
+  assert.throws(guard(list, new Set()), (e) => e.refused
     && /companygraph\/chat-server #64 resync-2026-09-29-release is open/.test(e.message) && /--force/.test(e.message));
 });
 
-test('a pull request this run would reuse today does not refuse', () => {
-  const list = pullsOf({
-    'companygraph/chat-server': [{ number: 70, headRefName: 'resync-2026-10-01', url: 'u' }, { number: 71, headRefName: 'resync-2026-10-01-release', url: 'u' }],
-    'o/site': [{ number: 3, headRefName: 'resync-vendored-2026-10-01', url: 'u' }],
-  });
-  assert.doesNotThrow(() => guardPulls({ members, date: '2026-10-01', force: false, list, log: () => {} }));
+test('an open pull request on today’s branch name that today’s record does not name refuses', () => {
+  const list = pullsOf({ 'o/site': [{ number: 5, headRefName: 'resync-2026-10-01', url: 'https://github.com/o/site/pull/5' }] });
+  assert.throws(guard(list, new Set(['https://github.com/o/site/pull/4'])), (e) => e.refused && /o\/site #5 resync-2026-10-01 is open/.test(e.message));
 });
 
-test('--force runs beside an older resync pull request and says so', () => {
+test('an open pull request that today’s record names does not refuse', () => {
+  const list = pullsOf({
+    'companygraph/chat-server': [{ number: 70, headRefName: 'resync-2026-10-01', url: 'u70' }],
+    'o/site': [{ number: 3, headRefName: 'resync-vendored-2026-10-01', url: 'u3' }],
+  });
+  assert.doesNotThrow(guard(list, new Set(['u70', 'u3'])));
+});
+
+test('--force runs beside a pull request no record names, and says so', () => {
   const list = pullsOf({ 'o/site': [{ number: 9, headRefName: 'resync-vendored-2026-09-30', url: 'u' }] });
   const said = [];
-  assert.doesNotThrow(() => guardPulls({ members, date: '2026-10-01', force: true, list, log: (m) => said.push(m) }));
+  assert.doesNotThrow(guard(list, new Set(), true, (m) => said.push(m)));
   assert.match(said.join('\n'), /o\/site #9 resync-vendored-2026-09-30 is open/);
 });
 
@@ -152,5 +158,33 @@ test('the open pull requests are asked of gh and only resync branches kept', () 
   const calls = [];
   const run = (args) => { calls.push(args); return JSON.stringify([{ number: 1, headRefName: 'resync-2026-09-29', url: 'a' }, { number: 2, headRefName: 'a-feature', url: 'b' }]); };
   assert.deepEqual(listResyncPulls('o/site', run), [{ number: 1, headRefName: 'resync-2026-09-29', url: 'a' }]);
-  assert.deepEqual(calls, [['pr', 'list', '--repo', 'o/site', '--state', 'open', '--json', 'number,headRefName,url']]);
+  assert.deepEqual(calls, [['pr', 'list', '--repo', 'o/site', '--state', 'open', '--limit', '100', '--json', 'number,headRefName,url']]);
+});
+
+test('without a record of today, no pull request is the run’s own, and every open resync one refuses', () => {
+  const outDir = mkdtempSync(join(tmpdir(), 'resync-'));
+  const own = ownPulls(outDir, '2026-10-01');
+  assert.equal(own.size, 0);
+  const list = pullsOf({ 'o/site': [{ number: 5, headRefName: 'resync-2026-10-01', url: 'u5' }] });
+  assert.throws(guard(list, own), (e) => e.refused);
+});
+
+test('a run writes its record as JSON, and its pull requests are its own the same day', () => {
+  const pins = JSON.stringify({ pins: [{ kind: 'npm-tag', file: 'package.json', repo: 'o/meta' }] });
+  const github = fakeGithub({
+    files: { 'o/meta': {}, 'o/a': { 'package.json': '{"m":"github:o/meta#v1.0.0"}', 'pins.json': pins } },
+    releases: { 'o/meta': { tag: 'v2.0.0', url: 'um' } },
+  });
+  const report = assessFamily({ github, members: ['o/meta', 'o/a'].map((repo) => ({ repo })), drawing: new Set(['o/a>o/meta']), date: '2026-10-01' });
+  const member = {
+    update(repo, moved) {
+      for (const p of moved) github.files[repo][p.file] = KINDS[p.kind].write(github.files[repo][p.file], p.upstream, p.available);
+      return { pr: `https://github.com/${repo}/pull/1`, merge: 'a'.repeat(40) };
+    },
+  };
+  const outDir = mkdtempSync(join(tmpdir(), 'resync-'));
+  const { record } = runResync({ report, selection: 'all', dryRun: false, github, member, date: '2026-10-01', outDir, log: () => {} });
+  assert.deepEqual(JSON.parse(readFileSync(join(outDir, 'resync-run-2026-10-01.json'), 'utf8')), record);
+  assert.deepEqual([...ownPulls(outDir, '2026-10-01')], ['https://github.com/o/a/pull/1']);
+  assert.equal(ownPulls(outDir, '2026-10-02').size, 0);
 });

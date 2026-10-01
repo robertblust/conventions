@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// `node family/resync.mjs <report.json> <all | chain numbers…> [--dry-run]` runs the chains the
-// owner chose from the report and writes dist/resync-run-<date>.md. It exits 1 when a member was
-// blocked, so an Action that runs it fails where a person is needed. `node family/resync.mjs
-// --clean-dry-runs` instead clears the throwaway worktrees a dry run left behind, and touches
-// nothing on GitHub. A run holds dist/resync.lock while it goes, and refuses to start beside
-// another run or beside an open resync pull request of an earlier day, which `--force` overrides.
+// `node family/resync.mjs <report.json> <all | chain numbers…> [--dry-run] [--force]` runs the
+// chains the owner chose from the report and writes dist/resync-run-<date>.md, and .json for a
+// real run. It exits 1 when a member was blocked, so an Action that runs it fails where a person
+// is needed. `node family/resync.mjs --clean-dry-runs` instead clears the throwaway worktrees a
+// dry run left behind, and touches nothing on GitHub. A run holds dist/resync.lock while it goes,
+// and refuses to start beside another run or beside an open resync pull request its own record of
+// the day does not name, which `--force` overrides.
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -84,16 +85,26 @@ export function withLock(lock, fn) {
 
 // The open pull requests of one member whose head starts with `resync-`.
 export function listResyncPulls(repo, run = gh) {
-  return JSON.parse(run(['pr', 'list', '--repo', repo, '--state', 'open', '--json', 'number,headRefName,url']))
+  return JSON.parse(run(['pr', 'list', '--repo', repo, '--state', 'open', '--limit', '100', '--json', 'number,headRefName,url']))
     .filter((p) => p.headRefName.startsWith('resync-'));
 }
 
-// A run reuses only the branches it names for its own day, so an open resync pull request of
-// another day is a run that has not finished, and starting beside it moves the same pins twice.
-const ownBranch = (head, date) => head === `resync-${date}` || head.startsWith(`resync-${date}-`) || head.startsWith(`resync-vendored-${date}`);
+// The pull requests this checkout's record of the day names. A second session the same day uses
+// the same resync-<date> branch names, so a name says nothing about whose run a pull request is;
+// only the record a run here wrote does.
+export function ownPulls(outDir, date) {
+  try {
+    const record = JSON.parse(readFileSync(join(outDir, `resync-run-${date}.json`), 'utf8'));
+    return new Set(record.map((r) => r.pr).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
 
-export function guardPulls({ members, date, force, list = listResyncPulls, log = console.log }) {
-  const open = members.flatMap(({ repo }) => list(repo).filter((p) => !ownBranch(p.headRefName, date)).map((p) => `${repo} #${p.number} ${p.headRefName} is open`));
+// An open resync pull request the record does not name is a run that has not finished, and
+// starting beside it moves the same pins twice.
+export function guardPulls({ members, own, force, list = listResyncPulls, log = console.log }) {
+  const open = members.flatMap(({ repo }) => list(repo).filter((p) => !own.has(p.url)).map((p) => `${repo} #${p.number} ${p.headRefName} is open`));
   if (!open.length) return;
   if (force) {
     log(`--force: running beside ${open.join('; ')}`);
@@ -144,6 +155,9 @@ export function runResync({ report, selection, dryRun, github, member, date, out
     mkdirSync(outDir, { recursive: true });
     const out = join(outDir, `resync-run-${date}.md`);
     writeFileSync(out, renderRecord(record, date, dryRun));
+    // The JSON is what a later run the same day reads to know its own pull requests; a dry run
+    // opens none, so it leaves a real run's record standing.
+    if (!dryRun) writeFileSync(join(outDir, `resync-run-${date}.json`), `${JSON.stringify(record, null, 2)}\n`);
     return out;
   };
   try {
@@ -175,7 +189,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     code = withLock({ path: join(HERE, 'dist/resync.lock'), args: process.argv.slice(2) }, (release) => {
       // An exit on a signal skips the finally, so the lock is removed here as well.
       for (const [signal, exit] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(signal, () => { release(); process.exit(exit); });
-      guardPulls({ members: report.members, date, force: args.force });
+      guardPulls({ members: report.members, own: ownPulls(join(HERE, 'dist'), date), force: args.force });
       const { out, record } = runResync({ ...args, report, github: realGithub(), member: realMember({ dryRun: args.dryRun }), date, outDir: join(HERE, 'dist'), log: console.log });
       console.log(out);
       return record.some((r) => r.status === 'blocked') ? 1 : 0;
