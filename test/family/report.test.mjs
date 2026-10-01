@@ -180,3 +180,12 @@ test('the re-sync-only label follows the AGENTS.md rule', () => {
   assert.deepEqual(m['robertblust/design'].unreleased.commits.map((c) => `${c.sha} ${c.resyncOnly}`), ['s1 true', 's2 false']);
   assert.match(renderReport(r), /  - s1 Takes conventions v1\.0\.0 \(re-sync only\)\n  - s2 Says more\n/);
 });
+
+test('a check in verify whose writer the steps never run is named under What disagrees', () => {
+  const github = world();
+  github.files['robertblust/site']['package.json'] = '{"scripts":{"sitemap":"node s.mjs","sitemap:check":"node s.mjs --check"},"d":"github:robertblust/design#v2.0.0","x":"github:someone/else#v1"}';
+  github.files['robertblust/site']['pins.json'] = JSON.stringify({ pins: [C, { kind: 'npm-tag', file: 'package.json', repo: 'robertblust/design', after: ['npm run design'] }], verify: ['npm test && npm run sitemap:check'] });
+  const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
+  assert.deepEqual(r.problems.filter((p) => p.type === 'missing-step'), [{ type: 'missing-step', repo: 'robertblust/site', text: 'pins.json never runs `npm run sitemap`, which `sitemap:check` in its verify checks' }]);
+  assert.match(renderReport(r), /## What disagrees\n\n(- .*\n)*- robertblust\/site: pins\.json never runs `npm run sitemap`, which `sitemap:check` in its verify checks\n/);
+});
