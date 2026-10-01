@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parseArgs, runResync, cleanDryRuns, lockRun, withLock, guardPulls, listResyncPulls, ownPulls } from '../../family/resync.mjs';
+import { parseArgs, runResync, cleanDryRuns, lockRun, withLock, guardPulls, listResyncPulls, ownPulls, recordPull } from '../../family/resync.mjs';
 import { assessFamily } from '../../family/report.mjs';
 import { KINDS } from '../../family/pins.mjs';
 import { fakeGithub } from './fake-github.mjs';
@@ -186,5 +186,14 @@ test('a run writes its record as JSON, and its pull requests are its own the sam
   const { record } = runResync({ report, selection: 'all', dryRun: false, github, member, date: '2026-10-01', outDir, log: () => {} });
   assert.deepEqual(JSON.parse(readFileSync(join(outDir, 'resync-run-2026-10-01.json'), 'utf8')), record);
   assert.deepEqual([...ownPulls(outDir, '2026-10-01')], ['https://github.com/o/a/pull/1']);
+  assert.equal(ownPulls(outDir, '2026-10-02').size, 0);
+});
+
+test('a run killed after it opened a pull request still counts it as its own', () => {
+  const outDir = mkdtempSync(join(tmpdir(), 'resync-'));
+  const onPull = recordPull(outDir, '2026-10-01');
+  assert.throws(() => { onPull('https://github.com/o/site/pull/8'); throw new Error('killed'); }, /killed/);
+  assert.equal(existsSync(join(outDir, 'resync-run-2026-10-01.json')), false);
+  assert.deepEqual([...ownPulls(outDir, '2026-10-01')], ['https://github.com/o/site/pull/8']);
   assert.equal(ownPulls(outDir, '2026-10-02').size, 0);
 });

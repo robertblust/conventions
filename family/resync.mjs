@@ -6,7 +6,7 @@
 // dry run left behind, and touches nothing on GitHub. A run holds dist/resync.lock while it goes,
 // and refuses to start beside another run or beside an open resync pull request its own record of
 // the day does not name, which `--force` overrides.
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, renameSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
@@ -89,16 +89,42 @@ export function listResyncPulls(repo, run = gh) {
     .filter((p) => p.headRefName.startsWith('resync-'));
 }
 
-// The pull requests this checkout's record of the day names. A second session the same day uses
-// the same resync-<date> branch names, so a name says nothing about whose run a pull request is;
-// only the record a run here wrote does.
-export function ownPulls(outDir, date) {
+const readJson = (path, fallback) => {
   try {
-    const record = JSON.parse(readFileSync(join(outDir, `resync-run-${date}.json`), 'utf8'));
-    return new Set(record.map((r) => r.pr).filter(Boolean));
+    return JSON.parse(readFileSync(path, 'utf8'));
   } catch {
-    return new Set();
+    return fallback;
   }
+};
+
+// The pull requests this checkout's runs of the day opened or took on. A second session the same
+// day uses the same resync-<date> branch names, so a name says nothing about whose run a pull
+// request is; only what a run here wrote down does. dist/resync-own-<date>.json is written the
+// moment a pull request has a url, so it holds one a run left open when it was blocked, threw or
+// was killed; the run's own record is read as well.
+export function ownPulls(outDir, date) {
+  const own = readJson(join(outDir, `resync-own-${date}.json`), []);
+  const record = readJson(join(outDir, `resync-run-${date}.json`), []);
+  return new Set([...own, ...record.map((r) => r.pr)].filter(Boolean));
+}
+
+// Adds a url to the day's own pull requests, through a rename so that a run stopped mid-write
+// leaves the file whole.
+export function recordPull(outDir, date) {
+  const path = join(outDir, `resync-own-${date}.json`);
+  return (url) => {
+    const own = readJson(path, []);
+    if (own.includes(url)) return;
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(`${path}.${process.pid}.tmp`, `${JSON.stringify([...own, url], null, 2)}\n`);
+    renameSync(`${path}.${process.pid}.tmp`, path);
+  };
+}
+
+// The member a run moves through; only a real run records its pull requests, since a dry run
+// opens none.
+export function memberFor({ dryRun, outDir, date, ...options }) {
+  return realMember({ ...options, dryRun, ...(dryRun ? {} : { onPull: recordPull(outDir, date) }) });
 }
 
 // An open resync pull request the record does not name is a run that has not finished, and
@@ -190,7 +216,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       // An exit on a signal skips the finally, so the lock is removed here as well.
       for (const [signal, exit] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(signal, () => { release(); process.exit(exit); });
       guardPulls({ members: report.members, own: ownPulls(join(HERE, 'dist'), date), force: args.force });
-      const { out, record } = runResync({ ...args, report, github: realGithub(), member: realMember({ dryRun: args.dryRun }), date, outDir: join(HERE, 'dist'), log: console.log });
+      const { out, record } = runResync({ ...args, report, github: realGithub(), member: memberFor({ dryRun: args.dryRun, outDir: join(HERE, 'dist'), date }), date, outDir: join(HERE, 'dist'), log: console.log });
       console.log(out);
       return record.some((r) => r.status === 'blocked') ? 1 : 0;
     });

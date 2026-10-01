@@ -65,6 +65,9 @@ export function realMember({
   log = console.log,
   checkWait = 10,
   checkTries = 30,
+  // Told the url of each pull request the run opens or takes on, the moment it has one, so a
+  // run that stops before its record is written still knows the pull request as its own.
+  onPull = () => {},
 } = {}) {
   const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   const sh = (cwd, cmd) => {
@@ -319,6 +322,7 @@ export function realMember({
       gh(['pr', 'create', '--repo', repo, '--head', branch, '--base', 'main', '--title', message.subject, '--body', message.body]);
       pr = existingPr(repo, branch);
     }
+    onPull(pr.url);
     const landed = merge(repo, pr);
     cleanup(dir, wt, branch);
     // The merge just moved origin/main; the clone follows it under the same rule as before work.
