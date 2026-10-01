@@ -3,13 +3,13 @@
 // chains the owner chose from the report and writes dist/resync-run-<date>.md, and .json for a
 // real run. It exits 1 when a member was blocked, so an Action that runs it fails where a person
 // is needed. `node family/resync.mjs --clean-dry-runs` instead clears the throwaway worktrees a
-// dry run left behind, and touches nothing on GitHub. A run holds dist/resync.lock while it goes,
-// and refuses to start beside another run or beside an open resync pull request its own record of
-// the day does not name, which `--force` overrides.
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, renameSync } from 'node:fs';
+// dry run left behind, and touches nothing on GitHub. A run holds family-resync.lock in the
+// clone's git directory while it goes, and refuses to start beside another run or beside an open
+// resync pull request its own record of the day does not name, which `--force` overrides.
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, renameSync, linkSync, statSync, realpathSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { orchestrate } from './orchestrate.mjs';
 import { realMember } from './member.mjs';
@@ -45,32 +45,77 @@ const isAlive = (pid) => {
   }
 };
 
+// The lock sits in the clone's common git directory, which every worktree of the clone shares,
+// so two sessions in two worktrees of this repository see the one lock, under one real path.
+export function lockPathOf(dir) {
+  return join(realpathSync(resolve(dir, execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd: dir, encoding: 'utf8' }).trim())), 'family-resync.lock');
+}
+
+// A lock that cannot be read is one being written, unless it is older than this.
+const UNREADABLE_FOR = 5 * 60 * 1000;
+
 // Two runs at once open the same resync-<date> branches and write the same dist/ files, so a
-// run takes the lock before anything else and refuses while the run that holds it is alive. A
-// lock whose run has died is taken over. The lock answers the function that removes it.
+// run takes the lock before anything else and refuses while the run that holds it is alive. The
+// lock is written whole to a file of its own and linked into place, which fails if a lock is
+// there, so no run reads a lock another has half written. A lock whose run has died is moved
+// aside and removed, and the link tried again, so of two runs taking it over only one wins and
+// the other then finds it held. The lock answers the function that removes it.
 export function lockRun({ path, args, pid = process.pid, log = console.log }) {
   mkdirSync(dirname(path), { recursive: true });
   const body = `${JSON.stringify({ pid, started: new Date().toISOString(), args })}\n`;
-  try {
-    writeFileSync(path, body, { flag: 'wx' });
-  } catch (e) {
-    if (e.code !== 'EEXIST') throw e;
-    let held = null;
-    try { held = JSON.parse(readFileSync(path, 'utf8')); } catch { /* an unreadable lock holds nothing */ }
-    if (Number.isInteger(held?.pid) && isAlive(held.pid)) {
-      throw refusal(`another resync is running: pid ${held.pid}, started ${held.started}; its lock is ${path}`);
-    }
-    log(`took over ${path} from pid ${held?.pid ?? 'unknown'}, started ${held?.started ?? 'unknown'}, which is no longer running`);
-    writeFileSync(path, body);
-  }
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
+  const aside = (what) => `${path}.${pid}.${what}`;
+  const create = () => {
+    writeFileSync(aside('new'), body);
     try {
-      if (JSON.parse(readFileSync(path, 'utf8')).pid === pid) unlinkSync(path);
-    } catch { /* gone already */ }
+      linkSync(aside('new'), path);
+      return true;
+    } catch (e) {
+      if (e.code === 'EEXIST') return false;
+      throw e;
+    } finally {
+      unlinkSync(aside('new'));
+    }
   };
+  for (let tries = 0; tries < 5; tries++) {
+    if (create()) {
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        try {
+          if (JSON.parse(readFileSync(path, 'utf8')).pid === pid) unlinkSync(path);
+        } catch { /* gone already */ }
+      };
+    }
+    let seen;
+    let held = null;
+    try {
+      seen = statSync(path);
+      held = JSON.parse(readFileSync(path, 'utf8'));
+    } catch (e) {
+      if (e.code === 'ENOENT') continue;
+    }
+    if (Number.isInteger(held?.pid)) {
+      if (isAlive(held.pid)) throw refusal(`another resync is running: pid ${held.pid}, started ${held.started}; its lock is ${path}`);
+    } else if (Date.now() - seen.mtimeMs < UNREADABLE_FOR) {
+      throw refusal(`a resync lock at ${path} cannot be read, and another run may be writing it; it counts as held until it is ${UNREADABLE_FOR / 60000} minutes old`);
+    }
+    // Moved aside first, so that a lock another run has put in its place since is put back
+    // rather than removed.
+    try {
+      renameSync(path, aside('dead'));
+    } catch (e) {
+      if (e.code === 'ENOENT') continue;
+      throw e;
+    }
+    if (statSync(aside('dead')).ino === seen.ino) {
+      log(`took over ${path} from pid ${held?.pid ?? 'unknown'}, started ${held?.started ?? 'unknown'}, which is no longer running`);
+    } else {
+      try { linkSync(aside('dead'), path); } catch { /* a third run holds it now */ }
+    }
+    unlinkSync(aside('dead'));
+  }
+  throw refusal(`could not take the resync lock at ${path}; other runs keep taking it`);
 }
 
 // Runs fn under the lock and removes it however fn ends.
@@ -130,13 +175,20 @@ export function memberFor({ dryRun, outDir, date, ...options }) {
 // An open resync pull request the record does not name is a run that has not finished, and
 // starting beside it moves the same pins twice.
 export function guardPulls({ members, own, force, list = listResyncPulls, log = console.log }) {
-  const open = members.flatMap(({ repo }) => list(repo).filter((p) => !own.has(p.url)).map((p) => `${repo} #${p.number} ${p.headRefName} is open`));
+  const ask = (repo) => {
+    try {
+      return list(repo);
+    } catch (e) {
+      throw refusal(`could not ask GitHub for the open pull requests of ${repo}, so the run cannot tell whether another is unfinished: ${e.message}`);
+    }
+  };
+  const open = members.flatMap(({ repo }) => ask(repo).filter((p) => !own.has(p.url)).map((p) => `${repo} #${p.number} ${p.headRefName} is open`));
   if (!open.length) return;
   if (force) {
     log(`--force: running beside ${open.join('; ')}`);
     return;
   }
-  throw refusal(`an earlier resync has not finished:\n${open.join('\n')}\nmerge or close each first, or pass --force to run beside them`);
+  throw refusal(`an earlier resync has not finished:\n${open.join('\n')}\nonly the pull requests a run in this checkout opened or took on today are its own, so one left open on an earlier day refuses too; merge or close each first, or pass --force to run beside them`);
 }
 
 // The worktrees of one member's clone whose branch starts with `dry-run-`, a throwaway a dry run
@@ -195,37 +247,53 @@ export function runResync({ report, selection, dryRun, github, member, date, out
   return { out: write(), record };
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const args = parseArgs(process.argv.slice(2));
+// The command, as a function of its arguments and of what it reaches, so a test can stub GitHub
+// and the members. It answers the exit code: 0 for a run with nothing blocked, 1 for a run that
+// blocked a member, 2 for a usage error, a chain the report does not hold or a refusal. It
+// installs no signal handler: the run waits in child processes, where a handler would never run
+// and would only keep the signal from ending the run, and a killed run's lock is taken over the
+// next time.
+export function main({
+  argv,
+  here = HERE,
+  date = today(),
+  lockPath = lockPathOf(here),
+  list = listResyncPulls,
+  github = realGithub(),
+  memberOf = memberFor,
+  log = console.log,
+  error = console.error,
+}) {
+  const args = parseArgs(argv);
   if (!args) {
-    console.error('usage: node family/resync.mjs <report.json> <all | chain numbers…> [--dry-run] [--force]');
-    console.error('   or: node family/resync.mjs --clean-dry-runs');
-    process.exit(2);
+    error('usage: node family/resync.mjs <report.json> <all | chain numbers…> [--dry-run] [--force]');
+    error('   or: node family/resync.mjs --clean-dry-runs');
+    return 2;
   }
   if (args.cleanDryRuns) {
-    const markdown = readFileSync(join(HERE, 'conventions/REPOSITORIES.md'), 'utf8');
-    cleanDryRuns({ members: parseMembers(markdown), log: console.log });
-    process.exit(0);
+    const markdown = readFileSync(join(here, 'conventions/REPOSITORIES.md'), 'utf8');
+    cleanDryRuns({ members: parseMembers(markdown), log });
+    return 0;
   }
   const report = JSON.parse(readFileSync(args.file, 'utf8'));
-  const date = today();
-  if (report.date !== date) console.log(`the report is from ${report.date}; the run reads every member again before it moves it`);
-  let code;
+  if (report.date !== date) log(`the report is from ${report.date}; the run reads every member again before it moves it`);
+  const outDir = join(here, 'dist');
   try {
-    code = withLock({ path: join(HERE, 'dist/resync.lock'), args: process.argv.slice(2) }, (release) => {
-      // An exit on a signal skips the finally, so the lock is removed here as well.
-      for (const [signal, exit] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(signal, () => { release(); process.exit(exit); });
-      guardPulls({ members: report.members, own: ownPulls(join(HERE, 'dist'), date), force: args.force });
-      const { out, record } = runResync({ ...args, report, github: realGithub(), member: memberFor({ dryRun: args.dryRun, outDir: join(HERE, 'dist'), date }), date, outDir: join(HERE, 'dist'), log: console.log });
-      console.log(out);
+    return withLock({ path: lockPath, args: argv, log }, () => {
+      guardPulls({ members: report.members, own: ownPulls(outDir, date), force: args.force, list, log });
+      const { out, record } = runResync({ ...args, report, github, member: memberOf({ dryRun: args.dryRun, outDir, date }), date, outDir, log });
+      log(out);
       return record.some((r) => r.status === 'blocked') ? 1 : 0;
     });
   } catch (err) {
     if (err.refused || err.message.startsWith('no chain')) {
-      console.error(err.message);
-      process.exit(2);
+      error(err.message);
+      return 2;
     }
     throw err;
   }
-  process.exit(code);
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  process.exit(main({ argv: process.argv.slice(2) }));
 }

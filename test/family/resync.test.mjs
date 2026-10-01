@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, utimesSync, realpathSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parseArgs, runResync, cleanDryRuns, lockRun, withLock, guardPulls, listResyncPulls, ownPulls, recordPull } from '../../family/resync.mjs';
+import { parseArgs, runResync, cleanDryRuns, lockRun, withLock, guardPulls, listResyncPulls, ownPulls, recordPull, lockPathOf, main } from '../../family/resync.mjs';
 import { assessFamily } from '../../family/report.mjs';
 import { KINDS } from '../../family/pins.mjs';
 import { fakeGithub } from './fake-github.mjs';
@@ -131,7 +131,8 @@ const guard = (list, own, force = false, log = () => {}) => () => guardPulls({ m
 test('an open pull request on an older resync branch refuses, naming it and --force', () => {
   const list = pullsOf({ 'companygraph/chat-server': [{ number: 64, headRefName: 'resync-2026-09-29-release', url: 'u64' }] });
   assert.throws(guard(list, new Set()), (e) => e.refused
-    && /companygraph\/chat-server #64 resync-2026-09-29-release is open/.test(e.message) && /--force/.test(e.message));
+    && /companygraph\/chat-server #64 resync-2026-09-29-release is open/.test(e.message) && /--force/.test(e.message)
+    && /earlier day/.test(e.message));
 });
 
 test('an open pull request on today’s branch name that today’s record does not name refuses', () => {
@@ -189,11 +190,97 @@ test('a run writes its record as JSON, and its pull requests are its own the sam
   assert.equal(ownPulls(outDir, '2026-10-02').size, 0);
 });
 
-test('a run killed after it opened a pull request still counts it as its own', () => {
+test('recordPull keeps a url written before the run threw, with no run record written', () => {
   const outDir = mkdtempSync(join(tmpdir(), 'resync-'));
   const onPull = recordPull(outDir, '2026-10-01');
   assert.throws(() => { onPull('https://github.com/o/site/pull/8'); throw new Error('killed'); }, /killed/);
   assert.equal(existsSync(join(outDir, 'resync-run-2026-10-01.json')), false);
   assert.deepEqual([...ownPulls(outDir, '2026-10-01')], ['https://github.com/o/site/pull/8']);
   assert.equal(ownPulls(outDir, '2026-10-02').size, 0);
+});
+
+test('an empty lock is held while it is fresh, and taken over once it is old', () => {
+  const path = lockPath();
+  mkdirSync(join(path, '..'), { recursive: true });
+  writeFileSync(path, '');
+  assert.throws(() => lockRun({ path, args: [], log: () => {} }), (e) => e.refused && /cannot be read/.test(e.message));
+  const old = new Date(Date.now() - 10 * 60 * 1000);
+  utimesSync(path, old, old);
+  const said = [];
+  const release = lockRun({ path, args: [], log: (m) => said.push(m) });
+  assert.equal(JSON.parse(readFileSync(path, 'utf8')).pid, process.pid);
+  assert.match(said.join('\n'), /took over/);
+  release();
+});
+
+test('taking the lock leaves nothing beside it but the lock', () => {
+  const path = lockPath();
+  const release = lockRun({ path, args: [], log: () => {} });
+  assert.deepEqual(readdirSync(join(path, '..')), ['resync.lock']);
+  release();
+  assert.deepEqual(readdirSync(join(path, '..')), []);
+});
+
+test('two worktrees of one clone share one lock', () => {
+  const root = mkdtempSync(join(tmpdir(), 'lock-wt-'));
+  const dir = join(root, 'conventions');
+  mkdirSync(dir);
+  git(dir, 'init', '-q', '-b', 'main');
+  git(dir, '-c', 'user.email=t@x', '-c', 'user.name=T', 'commit', '-q', '--allow-empty', '-m', 'seed');
+  const wt = join(root, 'conventions-a-branch');
+  git(dir, 'worktree', 'add', '-q', '-b', 'a-branch', wt);
+  assert.equal(lockPathOf(wt), lockPathOf(dir));
+  assert.equal(join(realpathSync(dirname(lockPathOf(dir))), 'family-resync.lock'), join(realpathSync(join(dir, '.git')), 'family-resync.lock'));
+  const release = lockRun({ path: lockPathOf(dir), args: [], log: () => {} });
+  assert.throws(() => lockRun({ path: lockPathOf(wt), args: [], log: () => {} }), (e) => e.refused);
+  release();
+});
+
+test('a member whose open pull requests gh cannot list refuses, naming it and gh', () => {
+  const list = (repo) => { if (repo === 'o/site') throw new Error('gh pr list --repo o/site: HTTP 502'); return []; };
+  assert.throws(guard(list, new Set()), (e) => e.refused && /o\/site/.test(e.message) && /HTTP 502/.test(e.message));
+});
+
+// The entry point, with GitHub and the members stubbed: a report that holds one member and
+// nothing to move, a lock in a temp directory, and a list of open pull requests the test chooses.
+function entry({ list, lock = lockPath() } = {}) {
+  const here = mkdtempSync(join(tmpdir(), 'resync-main-'));
+  const github = fakeGithub({ files: { 'o/meta': {} } });
+  const report = assessFamily({ github, members: [{ repo: 'o/meta' }], drawing: new Set(), date: '2026-10-01' });
+  const file = join(here, 'report.json');
+  writeFileSync(file, JSON.stringify(report));
+  const said = [];
+  const run = () => main({ argv: [file, 'all'], here, date: '2026-10-01', lockPath: lock, list, github, memberOf: () => ({}), log: () => {}, error: (m) => said.push(m) });
+  return { run, said, lock, here };
+}
+
+test('the entry takes the lock before it asks for pull requests, and removes it after', () => {
+  const e = entry({ list: () => { assert.equal(existsSync(e.lock), true); return []; } });
+  assert.equal(e.run(), 0);
+  assert.equal(existsSync(e.lock), false);
+  assert.equal(existsSync(join(e.here, 'dist/resync-run-2026-10-01.md')), true);
+});
+
+test('the entry exits 2 on a refusal, says why and leaves no lock', () => {
+  const e = entry({ list: () => [{ number: 4, headRefName: 'resync-2026-09-30', url: 'u4' }] });
+  assert.equal(e.run(), 2);
+  assert.match(e.said.join('\n'), /o\/meta #4 resync-2026-09-30 is open/);
+  assert.equal(existsSync(e.lock), false);
+});
+
+test('the entry exits 2 on a live lock and asks GitHub nothing', () => {
+  let asked = false;
+  const e = entry({ list: () => { asked = true; return []; } });
+  mkdirSync(join(e.lock, '..'), { recursive: true });
+  writeFileSync(e.lock, JSON.stringify({ pid: process.pid, started: 'then', args: [] }));
+  assert.equal(e.run(), 2);
+  assert.equal(asked, false);
+  assert.match(e.said.join('\n'), new RegExp(`pid ${process.pid}`));
+  assert.equal(existsSync(e.lock), true);
+});
+
+test('the entry installs no signal handler, so a signal still stops the run', () => {
+  const before = [process.listenerCount('SIGINT'), process.listenerCount('SIGTERM')];
+  entry({ list: () => [] }).run();
+  assert.deepEqual([process.listenerCount('SIGINT'), process.listenerCount('SIGTERM')], before);
 });
