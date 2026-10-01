@@ -1,0 +1,74 @@
+# The family report every weekday at 17:00 in Zurich, kept in one issue of this repository. Cron
+# runs in UTC and Zurich moves between UTC+2 in summer and UTC+1 in winter, so two schedules
+# start and the first step lets through only the one that lands at 17:00 local time. It reads
+# the members and writes nothing but the issue; running chains stays the owner's choice.
+name: family report
+on:
+  schedule:
+    - cron: '0 15 * * 1-5'
+    - cron: '0 16 * * 1-5'
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: family-report
+  cancel-in-progress: false
+jobs:
+  report:
+    # The report reads conventions' own main too, where this job is a check run while it runs;
+    # FAMILY_REPORT_IGNORE_CHECKS below names it, so rename both together.
+    name: family report
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: it is 17:00 in Zurich
+        id: gate
+        env:
+          TZ: Europe/Zurich
+          EVENT: ${{ github.event_name }}
+        run: |
+          hour=$(date +%H)
+          if [ "$EVENT" = workflow_dispatch ] || [ "$hour" = 17 ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "It is $hour:00 in Zurich, not 17:00, so this run stops here."
+          fi
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@v5
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: the report
+        id: report
+        if: steps.gate.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TZ: Europe/Zurich
+          FAMILY_REPORT_IGNORE_CHECKS: family report
+        run: |
+          path=$(node family/report.mjs)
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: family-report
+          path: dist/
+          retention-days: 14
+      - name: the issue
+        if: steps.gate.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT: ${{ steps.report.outputs.path }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title='Family resync report'
+          node family/issue.mjs "$REPORT" "$RUN_URL" > "$RUNNER_TEMP/body.md"
+          number=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number,title --jq "map(select(.title == \"$title\")) | .[0].number // empty")
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$RUNNER_TEMP/body.md"
+          fi

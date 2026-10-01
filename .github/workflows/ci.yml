@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: 22
       - run: shellcheck conventions/conventions-sync conventions/conventions-check conventions/conventions-format conventions/hooks/commit-msg test/run.sh
-      - run: python3 -c "import yaml; [yaml.safe_load(open(f)) for f in ('.github/workflows/check.yml', '.github/workflows/ci.yml')]"
+      - run: python3 -c "import yaml; [yaml.safe_load(open(f)) for f in ('.github/workflows/check.yml', '.github/workflows/ci.yml', '.github/workflows/report.yml')]"
       - run: sh test/run.sh
       - run: sh conventions/conventions-check
       - run: sh conventions/conventions-format
