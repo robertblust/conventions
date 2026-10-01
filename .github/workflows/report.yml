@@ -1,7 +1,9 @@
 # The family report every weekday at 17:00 in Zurich, kept in one issue of this repository. Cron
 # runs in UTC and Zurich moves between UTC+2 in summer and UTC+1 in winter, so two schedules
-# start and the first step lets through only the one that lands at 17:00 local time. It reads
-# the members and writes nothing but the issue; running chains stays the owner's choice.
+# start, and the first step lets through the one that is 17:00 in Zurich at today's offset:
+# 15:00 UTC at +0200, 16:00 UTC at +0100. It gates by schedule and offset, not by the hour, so
+# the right schedule still reports however late GitHub starts it, and the wrong one never does.
+# It reads the members and writes nothing but the issue; running chains stays the owner's choice.
 name: family report
 on:
   schedule:
@@ -25,15 +27,19 @@ jobs:
       - name: it is 17:00 in Zurich
         id: gate
         env:
-          TZ: Europe/Zurich
           EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
-          hour=$(date +%H)
-          if [ "$EVENT" = workflow_dispatch ] || [ "$hour" = 17 ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "It is $hour:00 in Zurich, not 17:00, so this run stops here."
+          offset=$(TZ=Europe/Zurich date +%z)
+          case "$EVENT|$SCHEDULE|$offset" in
+            "workflow_dispatch|"*) run=true ;;
+            "schedule|0 15 * * 1-5|+0200") run=true ;;
+            "schedule|0 16 * * 1-5|+0100") run=true ;;
+            *) run=false ;;
+          esac
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          if [ "$run" = false ]; then
+            echo "The schedule '$SCHEDULE' is not 17:00 in Zurich at offset $offset, so this run stops here."
           fi
       - if: steps.gate.outputs.run == 'true'
         uses: actions/checkout@v5
