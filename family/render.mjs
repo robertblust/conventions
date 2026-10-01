@@ -1,5 +1,6 @@
 // The report as Markdown for a person: counts first and what blocks, then whose main is not green,
-// then one table per level, the chains a resync can choose from, and what disagrees.
+// then one table per level, the chains a resync can choose from, and what disagrees. The run
+// record's Note column carries a member's note and each step or check that passed on a retry.
 import { shortV, longDate, plural } from './words.mjs';
 
 const cell = (s) => String(s).replace(/\|/g, '\\|').replace(/\n/g, ' ');
@@ -67,7 +68,7 @@ export function renderRecord(record, date, dryRun) {
   if (!record.length) return `${lines[0]}\n\nThe choice moved nothing.\n`;
   lines.push('| Member | Status | Pull request | Merge | Release | Note |', '| --- | --- | --- | --- | --- | --- |');
   for (const r of record) {
-    lines.push(`| ${r.repo} | ${r.status} | ${r.pr ?? ''} | ${r.merge ? shortV(r.merge) : ''} | ${r.release ?? ''} | ${cell(r.reason ?? r.note ?? '')} |`);
+    lines.push(`| ${r.repo} | ${r.status} | ${r.pr ?? ''} | ${r.merge ? shortV(r.merge) : ''} | ${r.release ?? ''} | ${cell([r.reason ?? r.note, ...(r.retries ?? [])].filter(Boolean).join('; '))} |`);
   }
   return `${lines.join('\n')}\n`;
 }

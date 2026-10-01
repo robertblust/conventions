@@ -6,7 +6,11 @@
 // run already merged, a reused worktree is reset to what the branch actually holds before
 // anything runs again, unless it holds work the run did not leave there, which blocks; and a
 // dry run works its own throwaway branch so it never leaves a worktree a real run would mistake
-// for its own.
+// for its own. One run takes hundreds of steps across the family, so a download cut off or a
+// render timed out under load is likely somewhere in it, and a failure like that passes when it
+// is tried again where a real one fails twice: every command the run runs in a worktree, and the
+// required checks of each pull request, get a second try before the member blocks, and each
+// second try that passed is named in what the member returns.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, readdirSync, mkdirSync, rmSync } from 'node:fs';
 import { join, dirname, isAbsolute } from 'node:path';
@@ -65,18 +69,35 @@ export function realMember({
   log = console.log,
   checkWait = 10,
   checkTries = 30,
+  // The seconds a failed command waits before its second try.
+  retryWait = 10,
   // Told the url of each pull request the run opens or takes on, the moment it has one, so a
   // run that stops before its record is written still knows the pull request as its own.
   onPull = () => {},
 } = {}) {
   const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-  const sh = (cwd, cmd) => {
+  const pause = (seconds) => { if (seconds > 0) execFileSync('sleep', [String(seconds)]); };
+  // Runs a command in a worktree, and once more after a pause when it fails; only a second
+  // failure blocks, naming what each try said, and a second try that passed is added to retries.
+  const attempt = (cwd, cmd) => {
     try {
       execFileSync('sh', ['-c', cmd], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024 });
+      return null;
     } catch (e) {
-      const tail = `${e.stdout ?? ''}${e.stderr ?? ''}`.trim().split('\n').slice(-5).join('\n');
-      throw new Blocked(`\`${cmd}\` failed${tail ? `:\n${tail}` : ''}`);
+      return `${e.stdout ?? ''}${e.stderr ?? ''}`.trim().split('\n').slice(-5).join('\n');
     }
+  };
+  const sh = (cwd, cmd, retries) => {
+    const first = attempt(cwd, cmd);
+    if (first === null) return;
+    pause(retryWait);
+    const second = attempt(cwd, cmd);
+    if (second !== null) {
+      const tries = first || second ? `, first with:\n${first || 'nothing'}\nthen with:\n${second || 'nothing'}` : ', saying nothing either time';
+      throw new Blocked(`\`${cmd}\` failed twice${tries}`);
+    }
+    const said = first.split('\n').filter(Boolean).at(-1);
+    retries.push(`\`${cmd}\` failed once${said ? ` (${said})` : ''}, passed on retry`);
   };
 
   // Fast-forwards a clone's `main` to `origin/main`, the one rule the run holds it to whether it
@@ -226,10 +247,43 @@ export function realMember({
     return i < 0 ? msg : msg.slice(i + 2);
   };
 
-  function waitForChecks(repo, number) {
+  // The checks of a pull request that failed, and the workflow runs they belong to, read from
+  // the run id each check's link names; a check whose link names no run cannot be rerun.
+  function failingChecks(repo, number) {
+    const checks = JSON.parse(gh(['pr', 'checks', String(number), '--repo', repo, '--required', '--json', 'name,bucket,link']));
+    const failed = checks.filter((c) => c.bucket === 'fail');
+    const runs = [...new Set(failed.map((c) => c.link?.match(/\/runs\/(\d+)/)?.[1]).filter(Boolean))];
+    return { names: [...new Set(failed.map((c) => c.name))], runs };
+  }
+
+  // GitHub queues a rerun, so a read made at once can still show the failure from before it. The
+  // run waits until none of the rerun checks reads `fail`, a bounded number of times, and only
+  // then watches the checks to their end.
+  function rerunStarted(repo, number, names) {
+    for (let i = 0; i < checkTries; i++) {
+      execFileSync('sleep', [String(checkWait)]);
+      let checks;
+      try {
+        checks = JSON.parse(gh(['pr', 'checks', String(number), '--repo', repo, '--required', '--json', 'name,bucket']));
+      } catch {
+        continue;
+      }
+      if (!checks.some((c) => names.includes(c.name) && c.bucket === 'fail')) return;
+    }
+  }
+  const named = (names) => listed(names.map((n) => `\`${n}\``));
+
+  // A required check that fails has its failed jobs rerun once, the second try a failed command
+  // gets, and only a failure after that blocks. A check that has not registered yet is waited
+  // for and is no failure.
+  function waitForChecks(repo, number, rerun) {
     for (let i = 0; ; i++) {
       try {
         gh(['pr', 'checks', String(number), '--repo', repo, '--watch', '--required']);
+        if (rerun.pending) {
+          rerun.retries.push(`the required check ${rerun.pending} failed once, passed on rerun`);
+          rerun.pending = null;
+        }
         return;
       } catch (e) {
         const noChecksYet = /no (required )?checks reported/i.test(e.message);
@@ -238,7 +292,24 @@ export function realMember({
           continue;
         }
         const base = `the required check did not pass on pull request #${number} of ${repo}`;
-        throw new Blocked(noChecksYet ? base : `${base}: ${tailOf(e.message)}`);
+        if (noChecksYet) throw new Blocked(base);
+        let failing = null;
+        try {
+          failing = failingChecks(repo, number);
+        } catch {
+          // without the failing runs there is nothing to rerun, and the failure stands
+        }
+        if (rerun.pending) throw new Blocked(`${base}: ${failing?.names.length ? named(failing.names) : rerun.pending} failed again after a rerun`);
+        if (rerun.done || !failing?.runs.length) throw new Blocked(`${base}: ${tailOf(e.message)}`);
+        try {
+          for (const id of failing.runs) gh(['run', 'rerun', id, '--repo', repo, '--failed']);
+        } catch (r) {
+          throw new Blocked(`${base}: ${named(failing.names)} failed, and its rerun was refused: ${tailOf(r.message)}`);
+        }
+        rerun.done = true;
+        rerun.pending = named(failing.names);
+        rerunStarted(repo, number, failing.names);
+        i = -1;
       }
     }
   }
@@ -252,13 +323,14 @@ export function realMember({
   // named. BEHIND is not waiting: the branch takes main and the checks run again. DIRTY does not
   // heal by waiting either: a conflict with main needs a person, so it blocks at once.
   const POLICY = /base branch policy prohibits the merge/i;
-  function merge(repo, pr) {
+  function merge(repo, pr, retries) {
     if (pr.state === 'MERGED') return { pr: pr.url, merge: pr.mergeCommit.oid };
     const n = String(pr.number);
     let behind = 0;
     let last = null;
+    const rerun = { done: false, pending: null, retries };
     for (let tries = 0; ; ) {
-      waitForChecks(repo, pr.number);
+      waitForChecks(repo, pr.number, rerun);
       const { mergeStateStatus } = JSON.parse(gh(['pr', 'view', n, '--repo', repo, '--json', 'mergeStateStatus']));
       if (mergeStateStatus === 'BEHIND') {
         if (++behind > 3) throw new Blocked(`pull request #${n} of ${repo} stayed behind main`);
@@ -311,7 +383,7 @@ export function realMember({
     return changed || hasNewCommit(wt);
   }
 
-  function pushAndMerge(repo, dir, wt, branch, message) {
+  function pushAndMerge(repo, dir, wt, branch, message, retries) {
     if (dryRun) {
       log(`dry run: ${repo}: committed in ${wt}; would push ${branch}, open “${message.subject}”, wait for its check and merge it`);
       return { pr: null, merge: null, note: null };
@@ -323,30 +395,30 @@ export function realMember({
       pr = existingPr(repo, branch);
     }
     onPull(pr.url);
-    const landed = merge(repo, pr);
+    const landed = merge(repo, pr, retries);
     cleanup(dir, wt, branch);
     // The merge just moved origin/main; the clone follows it under the same rule as before work.
     return { ...landed, note: fastForward(dir) };
   }
 
-  function land(repo, dir, wt, branch, message, author) {
+  function land(repo, dir, wt, branch, message, author, retries) {
     if (!commitIfChanged(wt, message, author)) throw new Blocked('the move changed nothing');
-    return pushAndMerge(repo, dir, wt, branch, message);
+    return pushAndMerge(repo, dir, wt, branch, message, retries);
   }
 
-  function move(wt, p, ran) {
+  function move(wt, p, ran, retries) {
     const kind = KINDS[p.kind];
     if (p.entry.move) {
       const cmd = p.entry.move.replaceAll('{version}', p.available);
-      sh(wt, cmd);
+      sh(wt, cmd, retries);
       ran.push(cmd);
     } else {
       const path = join(wt, p.file);
       writeFileSync(path, kind.write(readFileSync(path, 'utf8'), p.upstream, p.available));
       if (p.kind === 'conventions') rewriteWorkflows(wt, p.available);
-      for (const cmd of kind.commands) { sh(wt, cmd); ran.push(cmd); }
+      for (const cmd of kind.commands) { sh(wt, cmd, retries); ran.push(cmd); }
     }
-    for (const cmd of p.entry.after ?? []) { sh(wt, cmd); ran.push(cmd); }
+    for (const cmd of p.entry.after ?? []) { sh(wt, cmd, retries); ran.push(cmd); }
   }
 
   // A move that never touches an npm-tag pin leaves a worktree with no node_modules, and a
@@ -354,12 +426,12 @@ export function realMember({
   // lockfile sits and no node_modules answers it, `npm ci` runs once, at the worktree root and at
   // every directory a verify command names with `--prefix`; where node_modules is already there —
   // an npm-tag pin's own `npm install` left it — nothing runs twice.
-  function installForVerify(wt, verify, ran) {
+  function installForVerify(wt, verify, ran, retries) {
     const install = (dir) => {
       const base = dir === '.' ? wt : join(wt, dir);
       if (!existsSync(join(base, 'package-lock.json')) || existsSync(join(base, 'node_modules'))) return;
       const cmd = dir === '.' ? 'npm ci' : `npm ci --prefix ${dir}`;
-      sh(wt, cmd);
+      sh(wt, cmd, retries);
       ran.push(cmd);
     };
     install('.');
@@ -407,7 +479,7 @@ export function realMember({
     update(repo, pins, { date, verify = [] }) {
       const { dir, note: cloneNote } = clone(repo);
       if (pinsCurrent(dir, pins)) {
-        return { pr: null, merge: null, note: combineNotes(cloneNote, 'the pins are already on main') };
+        return { pr: null, merge: null, note: combineNotes(cloneNote, 'the pins are already on main'), retries: [] };
       }
       // A merge that moves only vendored files is named apart, so a later report does not read
       // it as work a release is owed for.
@@ -417,11 +489,12 @@ export function realMember({
         identity(wt);
         const seat = implementerOf(wt, repo);
         const ran = [];
-        for (const p of pins) move(wt, p, ran);
-        installForVerify(wt, verify, ran);
-        for (const cmd of verify) { sh(wt, cmd); ran.push(cmd); }
-        const landed = land(repo, dir, wt, branch, commitMessage(pins, ran), seat.author);
-        return { ...landed, note: combineNotes(cloneNote, seat.note, landed.note) };
+        const retries = [];
+        for (const p of pins) move(wt, p, ran, retries);
+        installForVerify(wt, verify, ran, retries);
+        for (const cmd of verify) { sh(wt, cmd, retries); ran.push(cmd); }
+        const landed = land(repo, dir, wt, branch, commitMessage(pins, ran), seat.author, retries);
+        return { ...landed, note: combineNotes(cloneNote, seat.note, landed.note), retries };
       });
     },
 
@@ -429,7 +502,7 @@ export function realMember({
       if (!dryRun) {
         try {
           gh(['release', 'view', tag, '--repo', repo]);
-          return { tag };
+          return { tag, retries: [] };
         } catch {
           // not released yet
         }
@@ -440,6 +513,7 @@ export function realMember({
       // fetched and found the bump already on.
       let target = null;
       let note = null;
+      const retries = [];
       if (commands.length) {
         const { dir } = clone(repo);
         const { wt, branch } = prepareWorktree(repo, dir, `resync-${date}-release`);
@@ -448,7 +522,7 @@ export function realMember({
           const seat = implementerOf(wt, repo);
           const bump = () => {
             const ran = [];
-            for (const c of commands) { const cmd = c.replaceAll('{version}', version); sh(wt, cmd); ran.push(cmd); }
+            for (const c of commands) { const cmd = c.replaceAll('{version}', version); sh(wt, cmd, retries); ran.push(cmd); }
             return ran;
           };
           const subject = `The version reads ${version}`;
@@ -464,7 +538,7 @@ export function realMember({
           const body = `The family resync releases ${tag} so that the repositories taking this one can re-pin it.\n\nVerified: ${ran.length ? `${listed(ran.map((c) => `\`${c}\``))} passed` : 'the bump was already committed'}.`;
           const message = { subject, body, full: `${subject}\n\n${body}\n\n${TRAILERS}\n` };
           if (commitIfChanged(wt, message, seat.author)) {
-            const landed = pushAndMerge(repo, dir, wt, branch, message);
+            const landed = pushAndMerge(repo, dir, wt, branch, message, retries);
             note = combineNotes(seat.note, landed.note);
             return landed.merge;
           } else {
@@ -482,11 +556,11 @@ export function realMember({
       }
       if (dryRun) {
         log(`dry run: ${repo}: would release ${tag}`);
-        return { tag: null, note };
+        return { tag: null, note, retries };
       }
       if (!target) target = git(clone(repo).dir, 'rev-parse', 'origin/main');
       gh(['release', 'create', tag, '--repo', repo, '--target', target, '--title', tag, '--notes', notes]);
-      return { tag, note };
+      return { tag, note, retries };
     },
   };
 }
