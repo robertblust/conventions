@@ -136,6 +136,26 @@ test('main is red, pending, none or green by its check runs', () => {
   assert.deepEqual(state([run('test', 'completed', 'success'), run('skip', 'completed', 'skipped'), run('n', 'completed', 'neutral')]), { state: 'green', failing: [] });
 });
 
+test('a check FAMILY_REPORT_IGNORE_CHECKS names does not count toward main', (t) => {
+  const run = (name, status, conclusion = null) => ({ name, status, conclusion });
+  const state = (runs) => mainState(fakeGithub({ checks: { 'o/r': runs } }), 'o/r');
+  const before = process.env.FAMILY_REPORT_IGNORE_CHECKS;
+  t.after(() => {
+    if (before === undefined) delete process.env.FAMILY_REPORT_IGNORE_CHECKS;
+    else process.env.FAMILY_REPORT_IGNORE_CHECKS = before;
+  });
+  delete process.env.FAMILY_REPORT_IGNORE_CHECKS;
+  assert.deepEqual(state([run('test', 'completed', 'success'), run('family report', 'in_progress')]), { state: 'pending', failing: [] });
+  assert.deepEqual(state([run('test', 'completed', 'success'), run('family report', 'completed', 'failure')]), { state: 'red', failing: ['family report'] });
+  process.env.FAMILY_REPORT_IGNORE_CHECKS = 'family report, other';
+  assert.deepEqual(state([run('test', 'completed', 'success'), run('family report', 'in_progress')]), { state: 'green', failing: [] });
+  assert.deepEqual(state([run('test', 'completed', 'success'), run('family report', 'completed', 'failure'), run('other', 'queued')]), { state: 'green', failing: [] });
+  assert.deepEqual(state([run('family report', 'in_progress')]), { state: 'none', failing: [] });
+  assert.deepEqual(state([run('test', 'in_progress'), run('family report', 'in_progress')]), { state: 'pending', failing: [] });
+  process.env.FAMILY_REPORT_IGNORE_CHECKS = '';
+  assert.deepEqual(state([run('family report', 'in_progress')]), { state: 'pending', failing: [] });
+});
+
 const BLOCK = '<!-- conventions · v1.35.0 -->\nShared conventions live in `conventions/`.\n<!-- end conventions -->\n';
 const agents = (block, own) => `${block}${own}`;
 function resyncWorld(extra = {}) {

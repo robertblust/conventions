@@ -197,9 +197,14 @@ export function unreleasedCommits(github, repo) {
 // Whether main's checks pass, so a red main is seen in the report and not first when the run
 // blocks on it.
 // A main with no check runs is `none`, which the report shows as green.
+// The scheduled report runs as a check on conventions' own main, so it would read that main as
+// pending while it runs, and as red the day after it failed; the workflow names its own check in
+// FAMILY_REPORT_IGNORE_CHECKS, comma-separated, and a check named there is not counted.
 const FAILED = new Set(['failure', 'cancelled', 'timed_out', 'action_required']);
+const ignoredChecks = () => new Set((process.env.FAMILY_REPORT_IGNORE_CHECKS ?? '').split(',').map((s) => s.trim()).filter(Boolean));
 export function mainState(github, repo) {
-  const runs = github.checks(repo);
+  const ignored = ignoredChecks();
+  const runs = github.checks(repo).filter((r) => !ignored.has(r.name));
   const failing = [...new Set(runs.filter((r) => r.status === 'completed' && FAILED.has(r.conclusion)).map((r) => r.name))].sort();
   if (failing.length) return { state: 'red', failing };
   if (runs.some((r) => r.status !== 'completed')) return { state: 'pending', failing: [] };
