@@ -32,6 +32,6 @@ jobs:
         if: github.event_name == 'pull_request'
         # This tag moves when a meta-model release changes what `commits` checks.
         env:
-          COMPANYGRAPH_RELEASE: v0.60.0
+          COMPANYGRAPH_RELEASE: v0.68.0
         run: |
           npx --yes --package "github:companygraph/meta-model#${COMPANYGRAPH_RELEASE}" companygraph commits .governing-instance --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
