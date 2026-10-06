@@ -24,7 +24,7 @@ guestgraph/service-conventions v0.12.0 solved the same problem for what it vendo
 
 ## 4. Release and how members take it
 
-A major: a member takes it by adding lines to its own `dependabot.yml`, which is more than a re-sync. The notes say so, and the check's own output names every line to add. On the sites, the group that kept `@robertblust/design` apart for reading has nothing left to hold once the package is ignored, and the member decides whether to keep its comment.
+A minor, by the owner's word, while the family is still working toward its final release: the script's commands and the block's shape are unchanged, and a member takes it by adding the lines the check names to its own `dependabot.yml`. The notes say so first. On the sites, the group that kept `@robertblust/design` apart for reading has nothing left to hold once the package is ignored, and the member decides whether to keep its comment.
 
 guestgraph/engine and guestgraph/connector-apaleo vendor their `dependabot.yml` from guestgraph/service-conventions, whose sync refuses a local edit, so their entry, `"*robertblust/conventions*"` in the `github-actions` block, comes from a service-conventions release that both take before this one reaches them.
 
