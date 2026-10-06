@@ -352,6 +352,91 @@ then ok "the prose check does not read a folder git ignores"
 else bad "the prose check read a folder git ignores: $(gicheck 2>&1)"
 fi
 
+# --- conventions-check: Dependabot leaves the family's pins alone ---------------------------
+# A member with a dependabot.yml, a list of two family repositories, and one pin of each kind the
+# check reads. Each case rewrites dependabot.yml and asserts the hits, so the pins stay put and
+# only what Dependabot is told changes.
+D=$TMP/dependabot
+mkdir -p "$D/conventions" "$D/.github/workflows" "$D/infra" "$D/chat"
+dcheck() { (cd "$D" && CONVENTIONS_REPO=x/y sh "$HERE/conventions/conventions-check"); }
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$D/conventions.json"
+printf '# Some member\n\nIts own text.\n' > "$D/README.md"
+cat > "$D/conventions/REPOSITORIES.md" <<'EOF'
+| Repository | Title | Purpose | Default branch | Local path |
+|---|---|---|---|---|
+| robertblust/conventions | Robert Blust — Conventions | conventions | main | ~/git/robertblust/conventions |
+| companygraph/mcp-server | CompanyGraph — MCP Server | the server | main | ~/git/companygraph/mcp-server |
+EOF
+cat > "$D/.github/workflows/conventions.yml" <<'EOF'
+jobs:
+  conventions:
+    # uses: robertblust/conventions/.github/workflows/check.yml@v0.0.1 is a comment, not a pin
+    uses: robertblust/conventions/.github/workflows/check.yml@v1.0.0
+  build:
+    steps:
+      - uses: actions/checkout@v7
+EOF
+printf '{ "devDependencies": { "companygraph-mcp-server": "github:companygraph/mcp-server#v0.58.0", "other": "github:someone/else#v1" } }\n' > "$D/package.json"
+printf '{ "dependencies": { "companygraph-mcp-server": "github:companygraph/mcp-server#v0.58.0" } }\n' > "$D/chat/package.json"
+printf 'module "server" {\n  source = "git::https://github.com/companygraph/mcp-server.git//deploy/google/terraform?ref=v0.58.0"\n}\n' > "$D/infra/main.tf"
+
+rm -f "$D/.github/dependabot.yml"
+if dcheck > /dev/null; then ok "a member without dependabot.yml is not asked about it"; else bad "a member without dependabot.yml failed: $(dcheck 2>&1)"; fi
+
+cat > "$D/.github/dependabot.yml" <<'EOF'
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+  - package-ecosystem: "npm"
+    directory: "/"
+  - package-ecosystem: "terraform"
+    directory: "/infra"
+EOF
+out=$(dcheck 2>&1 || true)
+if echo "$out" | grep -q 'the github-actions block for / watches robertblust/conventions/.github/workflows/check.yml (.github/workflows/conventions.yml:4), a family pin the resync moves; add  - dependency-name: "\*robertblust/conventions\*"  to its ignore'
+then ok "an unignored conventions workflow is named with its line and the entry to add"
+else bad "the conventions workflow was not named: $out"
+fi
+if echo "$out" | grep -q 'the npm block for / watches companygraph-mcp-server (package.json:1)' && echo "$out" | grep -q 'the terraform block for /infra watches https://github.com/companygraph/mcp-server.git//deploy/google/terraform (infra/main.tf:2)'
+then ok "a family package and a family module are named in the blocks that watch them"
+else bad "the npm or terraform pin was not named: $out"
+fi
+if [ "$(echo "$out" | grep -c '^✗ .github/dependabot.yml')" -eq 3 ]
+then ok "a comment, an action outside the family, a package outside it and a manifest no block watches are no hits"
+else bad "expected three hits, got: $out"
+fi
+
+cat > "$D/.github/dependabot.yml" <<'EOF'
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    ignore:
+      - dependency-name: "*robertblust/conventions*"
+  - package-ecosystem: npm
+    directories:
+      - "/"
+      - "/chat"
+    ignore:
+      - dependency-name: "companygraph-mcp-server"
+  - package-ecosystem: "terraform"
+    directory: "/infra/"
+    ignore:
+      - dependency-name: '*companygraph/mcp-server*'  # every path of the server
+EOF
+if dcheck > /dev/null
+then ok "globs, an exact name, a directories list, a trailing slash and a comment after a value all cover their pins"
+else bad "an ignored set of pins still failed: $(dcheck 2>&1)"
+fi
+
+sed -i.bak 's#"companygraph-mcp-server"#"companygraph-meta-model"#' "$D/.github/dependabot.yml" && rm -f "$D/.github/dependabot.yml.bak"
+out=$(dcheck 2>&1 || true)
+if echo "$out" | grep -q 'the npm block for /chat watches companygraph-mcp-server (chat/package.json:1)' && echo "$out" | grep -q 'the npm block for / watches companygraph-mcp-server'
+then ok "an ignore that names another package covers nothing, in every directory of its block"
+else bad "a wrong ignore was taken for the right one: $out"
+fi
+
 # --- conventions-check: the README title -----------------------------------------------------
 # A fixture, not a clone: CONVENTIONS_REPO is what a tree with no remote and no runner uses to
 # say which row is its own. The table here is two rows of the real shape, one ordinary member
