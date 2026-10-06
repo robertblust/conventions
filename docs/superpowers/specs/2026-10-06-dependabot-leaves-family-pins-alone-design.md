@@ -1,6 +1,6 @@
 # Dependabot leaves the family's pins alone — design
 
-> WORKING.md says a pin moves when the owner decides and that no bot proposes it, and the family resync now moves pins with everything their moves rewrite. Every member that keeps a `dependabot.yml` still lets Dependabot propose them. This states the rule in `PINS.md` and holds it in `conventions-check`.
+> WORKING.md says a pin moves when the owner decides and that no bot proposes it, and the family resync now moves pins with everything their moves rewrite. Every member that keeps a `dependabot.yml` still lets Dependabot propose them. This states the rule in `PINS.md` for family repositories and for the tools a conventions release pins, and holds it in `conventions-check`.
 
 Status: proposed. Decided on 2026-10-06 with the owner, against this repository at `0362479` (v1.43.0), from companygraph/meta-model#294, a Dependabot bump that failed because the version it moved is pinned twice more.
 
@@ -28,4 +28,4 @@ A major: a member takes it by adding lines to its own `dependabot.yml`, which is
 
 guestgraph/engine and guestgraph/connector-apaleo vendor their `dependabot.yml` from guestgraph/service-conventions, whose sync refuses a local edit, so their entry, `"*robertblust/conventions*"` in the `github-actions` block, comes from a service-conventions release that both take before this one reaches them.
 
-meta-model's `markdownlint-cli2` is not a family pin and is out of this rule. It is the family's Markdown form, pinned in `conventions-format` and in meta-model's own form check, and meta-model ignores it in a change of its own.
+A tool whose version a conventions release pins counts as a family pin wherever a `package.json` declares it. `markdownlint-cli2` is the family's Markdown form: `conventions-format` runs it at the version it pins, and companygraph/meta-model declares it and pins it again in its own form check, which is why meta-model#294 failed when Dependabot moved one copy. The check keeps the list in `TOOLS`, and `test/run.sh` holds it to the tools `conventions-format` runs. Today only meta-model declares one, and the check names its line like any other.
