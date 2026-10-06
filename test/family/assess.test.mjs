@@ -122,7 +122,7 @@ test('there are no unreleased commits without a release or when main is not ahea
 });
 
 test('a vendored path is one the conventions sync writes', () => {
-  for (const p of ['conventions/WRITING.md', 'conventions.json', 'pins.json', 'AGENTS.md', 'CLAUDE.md', '.markdownlint-cli2.jsonc', '.github/workflows/conventions.yml']) assert.equal(isVendored(p), true, p);
+  for (const p of ['conventions/WRITING.md', 'conventions.json', 'pins.json', 'AGENTS.md', 'CLAUDE.md', '.markdownlint-cli2.jsonc', '.github/workflows/conventions.yml', '.github/dependabot.yml']) assert.equal(isVendored(p), true, p);
   for (const p of ['README.md', 'docs/conventions/x.md', '.github/workflows/test.yml', 'src/AGENTS.md']) assert.equal(isVendored(p), false, p);
 });
 
@@ -189,6 +189,16 @@ test('a commit is re-sync only when it changes vendored files alone and AGENTS.m
   assert.equal(resyncOnly(gh, 'robertblust/design', 'out'), false);
   assert.equal(resyncOnly(gh, 'robertblust/design', 'merge'), false);
   assert.equal(resyncOnly(gh, 'robertblust/design', 'empty'), false);
+});
+
+// conventions v1.44.0 asks every member to ignore its family pins in .github/dependabot.yml, and
+// no consumer builds from that file, so a commit that only adds those lines owes no release.
+test('a commit that only changes .github/dependabot.yml is maintenance, not release work', () => {
+  const gh = resyncWorld();
+  gh.commits['robertblust/design:bot'] = { subject: "Dependabot leaves the family's pins alone", parents: 1, parent: 'p-bot', files: ['.github/dependabot.yml'] };
+  gh.commits['robertblust/design:botcode'] = { subject: 'Dependabot and the tokens', parents: 1, parent: 'p-botcode', files: ['.github/dependabot.yml', 'tokens.css'] };
+  assert.equal(resyncOnly(gh, 'robertblust/design', 'bot'), true);
+  assert.equal(resyncOnly(gh, 'robertblust/design', 'botcode'), false, 'beside a file a consumer builds from, it is work');
 });
 
 test('an AGENTS.md missing on one side counts as empty', () => {

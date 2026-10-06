@@ -150,10 +150,10 @@ export function releaseBlock(github, repo) {
 
 // What the conventions sync writes into a member, and the files beside it a member keeps by
 // hand that no consumer builds from: pins.json, the conventions workflow, the excludes in
-// conventions.json and CLAUDE.md. A commit that touches nothing else is a re-sync, a formality
-// a release still owes but no one has to read, so a hand edit to one of these files counts as
-// re-sync only by design.
-const VENDORED = new Set(['conventions.json', 'pins.json', 'AGENTS.md', 'CLAUDE.md', '.markdownlint-cli2.jsonc', '.github/workflows/conventions.yml']);
+// conventions.json, CLAUDE.md, and .github/dependabot.yml, whose family ignores PINS.md asks
+// for. A commit that touches nothing else is a re-sync, a formality a release still owes but no
+// one has to read, so a hand edit to one of these files counts as re-sync only by design.
+const VENDORED = new Set(['conventions.json', 'pins.json', 'AGENTS.md', 'CLAUDE.md', '.markdownlint-cli2.jsonc', '.github/workflows/conventions.yml', '.github/dependabot.yml']);
 export const isVendored = (path) => path.startsWith('conventions/') || VENDORED.has(path);
 
 // AGENTS.md is vendored only in its block; the rest of it is the member's own, so a commit that
