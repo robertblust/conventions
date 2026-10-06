@@ -437,6 +437,28 @@ then ok "an ignore that names another package covers nothing, in every directory
 else bad "a wrong ignore was taken for the right one: $out"
 fi
 
+# The tools a conventions release pins are family pins wherever a package.json declares them, and
+# the check's list is the one conventions-format runs, so the two cannot name different tools.
+printf '{ "devDependencies": { "markdownlint-cli2": "0.23.2", "typescript": "7.0.2" } }\n' > "$D/package.json"
+out=$(dcheck 2>&1 || true)
+if echo "$out" | grep -q 'the npm block for / watches markdownlint-cli2 (package.json:1), a family pin the resync moves; add  - dependency-name: "markdownlint-cli2"  to its ignore' && ! echo "$out" | grep -q 'watches typescript'
+then ok "a declared tool the conventions pin is a family pin, and another devDependency is not"
+else bad "markdownlint-cli2 was not held, or typescript was: $out"
+fi
+sed -i.bak 's#"companygraph-meta-model"#"markdownlint-cli2"#' "$D/.github/dependabot.yml" && rm -f "$D/.github/dependabot.yml.bak"
+out=$(dcheck 2>&1 || true)
+if ! echo "$out" | grep -q 'watches markdownlint-cli2'
+then ok "an ignored tool is covered"
+else bad "an ignored tool was still named: $out"
+fi
+tools=$(sed -n 's/^TOOLS="\(.*\)"$/\1/p' "$HERE/conventions/conventions-check")
+# shellcheck disable=SC2016 # $VERSION is the literal text of conventions-format's npx line
+ran=$(sed -n 's/.*npx --yes "\([^@"]*\)@\$VERSION".*/\1/p' "$HERE/conventions/conventions-format" | sort -u | tr '\n' ' ' | sed 's/ $//')
+if [ -n "$tools" ] && [ "$tools" = "$ran" ]
+then ok "the check's pinned tools are the ones conventions-format runs: $tools"
+else bad "the check pins \"$tools\" and conventions-format runs \"$ran\""
+fi
+
 # --- conventions-check: the README title -----------------------------------------------------
 # A fixture, not a clone: CONVENTIONS_REPO is what a tree with no remote and no runner uses to
 # say which row is its own. The table here is two rows of the real shape, one ordinary member
