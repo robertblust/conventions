@@ -64,7 +64,7 @@ The German cells are inline code because the prose check reads no language and a
 | standard | standard | `Massstab` | A yardstick. Not `Anspruch`, which is this table's claim. |
 | takeaway | takeaway | `Fazit` | The label that closes a talk's argument. |
 | Software Engineer & Architect | Software Engineer & Architect | `Software Engineer & Architect` | The owner's title, English in both views, as Swiss IT titles usually are; in a sentence, `Software Engineer und Architect`. |
-| seat (billed) | seat | `Nutzer` | What billing does not count: «Nicht pro Nutzer». Not `Sitzplatz`, a seat in a theater; a seat a person holds on a team page stays `Sitz`. |
+| seat (billed) | seat | `Nutzer` | What billing does not count: «Nicht pro Nutzer». Not `Sitzplatz`, a seat in a theater; a seat in a process stays `Sitz`. |
 | retainer | retainer | `Pauschalhonorar` | A flat fee paid ahead of the work. |
 | day rate | rate | `Tagessatz` | What is billed per day. Not the bare `Satz`, which is also a sentence. |
 | CLI | CLI | `CLI` | The command-line tool, `die CLI`, even where the English says command line. |
@@ -72,8 +72,10 @@ The German cells are inline code because the prose check reads no language and a
 | maker | maker | `Erzeuger` | What writes a surface, a person or a build. Not `Urheber`, which carries copyright. |
 | Direction | Direction | `Ausrichtung` | The group over vision, values and strategy. Not `Richtung`, a heading on a map. |
 | kind | kind | `Art` | The kind of an entity. `Typ` stays for what a schema declares, so the two words keep two meanings. |
+| seat | seat | `Sitz` | Core's type: a place in a process that a profile holds, a human or an agent: «Ein Sitz ist kein Mensch.» Not `Rolle`, the type's former name, which stays for a position held. A process provides for its seats, «die Sitze, die sie vorsehen». |
+| process | process | `Prozess` | Core's type, the work and its phases; the page `/processes/` is «Prozesse». Not `Ablauf`: the sites write `Prozess` throughout, on the page and in its rules. |
 | person (in a seat) | person | `Mensch` | The human who holds a seat, set against an agent: «ein Mensch wacht über jedes Gate». An ordinary person stays `Person`. |
-| board | board | `Übersicht` | A team page's grid of seats. Not `Tafel`, a blackboard. |
+| board | board | `Übersicht` | A Processes page's grid of seats, one per process. Not `Tafel`, a blackboard. |
 | projection | projection | `Projektion` | The model as a derived view of how a company runs. |
 | adoption | adoption | `Verbreitung` | A thing others take up: «wenn es sich durchsetzt … seine Verbreitung». |
 | process (data) | process | `bearbeiten` | The DSG's verb, for content as well as personal data, on a page that names the DSG. |
