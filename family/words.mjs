@@ -30,4 +30,13 @@ export function releaseNotes(pins) {
   return `This release takes newer pins and changes nothing else: ${moves(pins)}.${notes.length ? ` Their notes are at ${listed(notes)}.` : ''}\n\nNothing breaks. A repository that takes this one re-pins it and changes nothing else.\n`;
 }
 
+// The release notes of a member whose unreleased work includes pull requests a person made to
+// move its pins: the run's notes, with one line per pull request after their first paragraph.
+export function withCarried(notes, pulls) {
+  if (!pulls.length) return notes;
+  const lines = pulls.map((p) => `It also carries [#${p.number}](${p.url}), made by hand: ${p.title}.`).join('\n');
+  const [first, ...rest] = notes.split('\n\n');
+  return [first, lines, ...rest].join('\n\n');
+}
+
 export const pendingNotes = () => 'This release carries pins the family resync already merged and changes nothing else.\n\nNothing breaks. A repository that takes this one re-pins it and changes nothing else.\n';

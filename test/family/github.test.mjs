@@ -45,3 +45,14 @@ test('a commit and main\'s check runs are read in the shape the report uses', ()
   assert.deepEqual(github.commit('o/server', 's1'), { subject: 'Takes conventions v1.35.0', parents: 1, parent: 'p', files: ['conventions.json', 'conventions/WRITING.md', 'src/WRITING.md'] });
   assert.deepEqual(github.checks('o/server'), [{ name: 'test', status: 'completed', conclusion: 'failure' }]);
 });
+
+test('a commit\'s merged pull requests from the repository itself, in the shape the scan uses', () => {
+  const github = answering({
+    'repos/o/server/commits/s1/pulls': [
+      { number: 7, title: 'Takes meta v2.0.0', html_url: 'u7', merged_at: '2026-10-09T10:00:00Z', merge_commit_sha: 'm7', base: { sha: 'b7' }, head: { ref: 'meta-2', repo: { full_name: 'o/server' } } },
+      { number: 8, title: 'Open', html_url: 'u8', merged_at: null, merge_commit_sha: 'm8', base: { sha: 'b8' }, head: { ref: 'open', repo: { full_name: 'o/server' } } },
+      { number: 9, title: 'Fork', html_url: 'u9', merged_at: '2026-10-09T10:00:00Z', merge_commit_sha: 'm9', base: { sha: 'b9' }, head: { ref: 'fork', repo: { full_name: 'fork/server' } } },
+    ],
+  });
+  assert.deepEqual(github.pullsOf('o/server', 's1'), [{ number: 7, title: 'Takes meta v2.0.0', url: 'u7', head: 'meta-2', base: 'b7', merge: 'm7' }]);
+});

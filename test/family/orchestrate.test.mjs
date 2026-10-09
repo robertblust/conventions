@@ -358,3 +358,32 @@ test('a named member whose only behind pin is its conventions pin moves and is n
   orchestrate({ report, selection: ['o/server'], github, member, date: '2026-09-28' });
   assert.deepEqual(member.calls.map((c) => c.op), ['update']);
 });
+
+// o/server's main already holds o/meta v2.0.0 from hand pull request #7; its last release is v1.0.0.
+function handMoved(github) {
+  github.files['o/server']['package.json'] = '{"m":"github:o/meta#v2.0.0"}';
+  github.files['o/server']['package.json@b7'] = '{"m":"github:o/meta#v1.0.0"}';
+  github.files['o/server']['package.json@m7'] = '{"m":"github:o/meta#v2.0.0"}';
+  github.compares['o/server:v1.0.0...main'] = { aheadBy: 1, shas: ['h1'], files: [] };
+  github.pullRecords['o/server:h1'] = [{ number: 7, title: 'Takes meta v2.0.0', url: 'u7', head: 'meta-2', base: 'b7', merge: 'm7' }];
+  return github;
+}
+
+test('a member moved by hand is released by the next run, its notes naming the pull request', () => {
+  const github = handMoved(world());
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  orchestrate({ report, selection: [releaseChain(report, 'o/server')], github, member, date: '2026-09-28' });
+  const rel = member.calls.find((c) => c.op === 'release' && c.repo === 'o/server');
+  assert.equal(rel.tag, 'v1.1.0');
+  assert.match(rel.notes, /\n\nIt also carries \[#7\]\(u7\), made by hand: Takes meta v2\.0\.0\.\n\n/);
+  assert.ok(member.calls.some((c) => c.op === 'update' && c.repo === 'o/site'));
+});
+
+test('a dry run over a member moved by hand writes the same notes', () => {
+  const github = handMoved(world());
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  orchestrate({ report, selection: [releaseChain(report, 'o/server')], github, member, date: '2026-09-28', dryRun: true });
+  assert.match(member.calls.find((c) => c.op === 'release').notes, /made by hand: Takes meta v2\.0\.0\./);
+});

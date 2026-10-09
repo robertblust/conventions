@@ -1,4 +1,4 @@
-// What the report and the run read from GitHub, as seven questions. A test answers them from
+// What the report and the run read from GitHub, as eight questions. A test answers them from
 // fixtures instead; the scripts ask nothing else.
 import { ghOrNull } from './gh.mjs';
 
@@ -29,6 +29,11 @@ export function realGithub() {
     },
     pullHeads(repo, sha) {
       return (json(`repos/${repo}/commits/${sha}/pulls`) ?? []).filter((p) => p.head.repo?.full_name === repo).map((p) => p.head.ref);
+    },
+    pullsOf(repo, sha) {
+      return (json(`repos/${repo}/commits/${sha}/pulls`) ?? [])
+        .filter((p) => p.head.repo?.full_name === repo && p.merged_at)
+        .map((p) => ({ number: p.number, title: p.title, url: p.html_url, head: p.head.ref, base: p.base.sha, merge: p.merge_commit_sha }));
     },
     commit(repo, sha) {
       const c = found(repo, `repos/${repo}/commits/${sha}`);

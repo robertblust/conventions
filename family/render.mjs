@@ -18,7 +18,7 @@ export function renderReport(data) {
       if (!m.unreleased) continue;
       lines.push(`  - [${m.unreleased.since}...main](${m.unreleased.compare})`);
       if (!m.unreleased.commits) lines.push(`  - the commits could not be read: ${cell(m.unreleased.error)}`);
-      for (const c of m.unreleased.commits ?? []) lines.push(`  - ${c.sha.slice(0, 7)} ${cell(c.subject)}${c.resyncOnly ? ' (re-sync only)' : ''}`);
+      for (const c of m.unreleased.commits ?? []) lines.push(`  - ${c.sha.slice(0, 7)} ${cell(c.subject)}${c.resyncOnly ? ' (re-sync only)' : ''}${c.pinMove ? ' (pin move)' : ''}`);
     }
     lines.push('');
   }

@@ -134,6 +134,20 @@ test('a blocked member names its unreleased commits under its bullet, marking a 
   assert.match(md, /- robertblust\/design: unreleased work on main: 1 commit since v2\.1\.0\n  - \[v2\.1\.0\.\.\.main\]\(https:\/\/github\.com\/robertblust\/design\/compare\/v2\.1\.0\.\.\.main\)\n  - s1 Takes conventions v1\.0\.0 \(re-sync only\)\n  - s2 Tokens \\\| spacing\n/);
 });
 
+test('a hand pin move is marked in the commit list', () => {
+  const github = world();
+  github.commits['robertblust/design:s1'] = { subject: 'Takes meta v2.0.0', parents: 1, files: ['package.json'] };
+  github.commits['robertblust/design:s2'] = { subject: 'Tokens spacing', parents: 1, files: ['tokens.css'] };
+  github.files['robertblust/design']['pins.json'] = declare(C, { kind: 'npm-tag', file: 'package.json', repo: 'robertblust/meta' });
+  github.files['robertblust/design']['conventions.json@b1'] = conv('v1.0.0');
+  github.files['robertblust/design']['conventions.json@m1'] = conv('v1.0.0');
+  github.files['robertblust/design']['package.json@b1'] = '{"m":"github:robertblust/meta#v1.0.0"}';
+  github.files['robertblust/design']['package.json@m1'] = '{"m":"github:robertblust/meta#v2.0.0"}';
+  github.pullRecords['robertblust/design:s1'] = [{ number: 1, title: 'Takes meta v2.0.0', url: 'u1', head: 'meta-2', base: 'b1', merge: 'm1' }];
+  const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
+  assert.match(renderReport(r), /\n  - s1 Takes meta v2\.0\.0 \(pin move\)\n  - s2 Tokens spacing\n/);
+});
+
 test('the Main section names a red, running or unknown main', () => {
   const github = world();
   github.runs['robertblust/design'] = [{ name: 'test', status: 'completed', conclusion: 'failure' }, { name: 'conventions', status: 'completed', conclusion: 'cancelled' }];

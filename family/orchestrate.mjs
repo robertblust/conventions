@@ -7,10 +7,10 @@
 // member that moved only its conventions or service-conventions pin is not released for that
 // move, though a release an earlier run left undone is still finished. A step or a required check
 // that passed only on its second try leaves the member done, and the record names each one.
-import { readMember, assessPins, releaseBlock, pendingRelease } from './assess.mjs';
+import { readMember, assessPins, releaseBlock, pendingRelease, handPulls } from './assess.mjs';
 import { releasesIn, edgesOf, downstreamOf, NON_PROPAGATING } from './graph.mjs';
 import { pinKey } from './pins.mjs';
-import { releaseNotes, pendingNotes } from './words.mjs';
+import { releaseNotes, pendingNotes, withCarried } from './words.mjs';
 
 export const nextMinor = (tag) => {
   const m = tag?.match(/^v?(\d+)\.(\d+)\.\d+$/);
@@ -65,10 +65,10 @@ export function orchestrate({ report, selection, github, member, date, dryRun = 
   const wouldRelease = new Set();
   // A release answers its tag, a note where its bump could not be authored as the Implementer,
   // and the steps and checks that passed only when tried again.
-  const release = (repo, ...args) => {
-    const { tag, note = null, retries = [] } = member.release(repo, ...args);
+  const release = (repo, tag, notes, ...rest) => {
+    const { tag: released, note = null, retries = [] } = member.release(repo, tag, withCarried(notes, handPulls(github, repo)), ...rest);
     if (dryRun) wouldRelease.add(repo);
-    return { tag, note, retries };
+    return { tag: released, note, retries };
   };
   const retried = (...lists) => {
     const all = lists.flatMap((l) => l ?? []);
