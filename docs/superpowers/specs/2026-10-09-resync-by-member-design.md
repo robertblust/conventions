@@ -42,19 +42,19 @@ A name that is not a member of `REPOSITORIES.md`, or a member with no pin behind
 
 ## 3. A pin move made by hand is the run's own work
 
-A commit since a member's last release counts as the run's own, and not as work, when it belongs to a merged pull request that moved one of the member's declared pins: the value a `pins.json` entry of the member reads in its file differs between the merge commit's first parent and the merge. The first parent is the commit the merge followed, which is what the pull request changed on main; a stacked layer's base is not that commit, and a layer whose lower pull request had already moved the pin would otherwise count as a move itself. A conventions or service-conventions pin does not count: a hand move of one is a re-sync, which owes no release, as the rule for vendored moves says. Every commit of such a pull request counts, the fix that came with the move included, because the pull request is the person's account of why the move needed it.
+A commit since a member's last release counts as the run's own, and not as work, when it belongs to a pull request merged into `main` that moved one of the member's declared pins: a `pins.json` entry of the member reads a value in its file at both the merge commit's first parent and the merge, and the two differ. A pin that reads a value at only one of them was added or dropped, not moved, so a pull request that brings in a dependency on a family member, or drops one, is work like any other: a dependency brought in is new code the member takes rather than a newer version of what it took, and one dropped is code it no longer ships, so neither is a re-pin the notes could call one. Only a pull request into `main`, the default branch of every member, counts, because `main` is what a release carries. The first parent is the commit the merge followed, which is what the pull request changed on main; a stacked layer's base is not that commit, and a layer whose lower pull request had already moved the pin would otherwise count as a move itself. A conventions or service-conventions pin does not count: a hand move of one is a re-sync, which owes no release, as the rule for vendored moves says. Every commit of such a pull request counts, the fix that came with the move included, because the pull request is the person's account of why the move needed it.
 
-Every other commit still counts as work and still blocks, as now: a pull request that moved no pin, and a commit that belongs to no pull request. A pull request whose pin values cannot be read counts as work, keeping `releaseBlock`'s rule that blocking is the side a wrong guess can be undone from, unless the commit only re-synced: an unreadable pin fails to prove a move and is no evidence of work. A member with no declared pin that propagates is not asked at all.
+Every other commit still counts as work and still blocks, as now: a pull request that moved no pin, and a commit that belongs to no pull request. A pull request whose pin values cannot be read counts as work, keeping `releaseBlock`'s rule that blocking is the side a wrong guess can be undone from, unless the commit only re-synced: an unreadable pin fails to prove a move and is no evidence of work. For a member with no declared pin that propagates, the merge commit and the pin files are not read.
 
-The release notes the run writes for such a member are its re-pin notes and one line for each hand pull request they carry: "It also carries #155, made by hand: Takes meta-model v0.88.0", linked, naming the pull request by its title and not paraphrasing it. A hand pull request may change more than its pin, so the first paragraph of those notes does not say the release changes nothing else.
+The release notes the run writes for such a member are its re-pin notes and one line for each hand pull request they carry: "It also carries #155, made by hand: Takes meta-model v0.88.0", linked, naming the pull request by its title and not paraphrasing it. A hand pull request may change more than its pin, so the first paragraph of those notes does not say the release changes nothing else. A release that finishes over what is already on `main` credits the family resync only where a resync pull request merged pins; where hand pull requests alone moved them, its first paragraph says the pins were moved by hand in the pull requests it then lists, and where both did, it says both.
 
 The report, in its list of a member's unreleased commits, marks such a commit `(pin move)` beside the existing `(re-sync only)`, so the owner sees before a run what it would release and why. The chain that offers the release of a member whose main holds such pull requests names them in its heading.
 
 ## 4. Errors
 
 - A pick that is neither `all`, a positive whole number nor a member's name fails in `parseArgs`, with the usage line.
-- A name not in `REPOSITORIES.md`, a named member with nothing behind, or a named member on a cycle, which has no level to move at, refuses the run before it moves anything.
-- A pull request that cannot be read leaves its commits counted as work.
+- A name not in `REPOSITORIES.md`, a named member with nothing behind, or a named member on or above a cycle, which has no level to move at, refuses the run before it moves anything.
+- A pull request that cannot be read leaves its commits counted as work, unless the commit only re-synced.
 
 ## 5. Tests
 
@@ -62,7 +62,7 @@ In `test/family/`, with the fake GitHub the tests already use:
 
 - `parseArgs`: one name, several names, names mixed with numbers, an unknown name, a malformed name.
 - `orchestrate`: a named member moves alone and nothing downstream runs; the record's leftover line names what was left; a name and a chain mixed move level by level; a named member with nothing behind refuses; a named member taken by tag is merged and not released.
-- `releaseBlock`: a merged pull request that moved a declared pin counts as the run's, its fix commit included; one that moved no pin blocks; a pin-move pull request beside a separate feature commit blocks; a pull request that cannot be read blocks.
+- `releaseBlock`: a merged pull request that moved a declared pin counts as the run's, its fix commit included; one that moved no pin blocks; one that added or dropped a dependency blocks; one merged into a branch other than `main` blocks; a pin-move pull request beside a separate feature commit blocks; a pull request that cannot be read blocks.
 - The release notes carry the "made by hand" line, and the report marks a pin-move commit `(pin move)`.
 
 ## 6. What it costs
