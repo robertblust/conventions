@@ -1,6 +1,6 @@
 ---
 name: family-resync
-description: Use when the owner asks to resync the family, to bring members up to the latest releases or commits of what they pin, or to run chains from the family report. Runs the report, asks which chains to run, then merges, tags and releases through the chosen chains.
+description: Use when the owner asks to resync the family, to bring members up to the latest releases or commits of what they pin, or to run chains from the family report. Runs the report, asks which chains to run or which members to move by name, then merges, tags and releases through the choice.
 ---
 
 # Family resync
