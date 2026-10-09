@@ -83,13 +83,24 @@ test('after a release bump merges, the clone\'s main follows origin/main', () =>
   assert.equal(git(dir, 'rev-parse', 'main'), git(bare, 'rev-parse', 'main'));
 });
 
-test('a worktree with a lockfile and no node_modules installs before its verify commands run', () => {
+test('a worktree with a lockfile and no node_modules installs before its after steps and verify commands run', () => {
   const d = setup();
   const bare = seed(d.remote, 'o/site', { ...siteFiles, 'package-lock.json': '{}\n' });
   const out = member(d).update('o/site', [pin], { date: '2026-09-28', verify: ['true'] });
   assert.equal(out.pr, 'https://github.com/o/site/pull/1');
   assert.match(npmCalls(d), /^ci$/m);
-  assert.match(git(bare, 'log', '-1', '--format=%B', 'main^2'), /Verified: `echo built > built\.txt`, `npm ci` and `true` passed\./);
+  assert.match(git(bare, 'log', '-1', '--format=%B', 'main^2'), /Verified: `npm ci`, `echo built > built\.txt` and `true` passed\./);
+});
+
+test('a worktree with a lockfile and no node_modules installs once, before a pin\'s after steps need it', () => {
+  const d = setup();
+  const bare = seed(d.remote, 'o/site', { ...siteFiles, 'package-lock.json': '{}\n' });
+  const needsModules = 'test -d node_modules && echo built > built.txt';
+  const out = member(d).update('o/site', [{ ...pin, entry: { ...pin.entry, after: [needsModules] } }], { date: '2026-09-28', verify: ['true'] });
+  assert.equal(out.pr, 'https://github.com/o/site/pull/1');
+  assert.equal(npmCalls(d), 'ci\n');
+  assert.equal(git(bare, 'show', 'main:built.txt'), 'built');
+  assert.match(git(bare, 'log', '-1', '--format=%B', 'main^2'), /Verified: `npm ci`, `test -d node_modules && echo built > built\.txt` and `true` passed\./);
 });
 
 test('a worktree that already has node_modules is not installed again', () => {

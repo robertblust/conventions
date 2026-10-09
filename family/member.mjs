@@ -418,25 +418,30 @@ export function realMember({
       if (p.kind === 'conventions') rewriteWorkflows(wt, p.available);
       for (const cmd of kind.commands) { sh(wt, cmd, retries); ran.push(cmd); }
     }
-    for (const cmd of p.entry.after ?? []) { sh(wt, cmd, retries); ran.push(cmd); }
+    const after = p.entry.after ?? [];
+    if (after.length) installAt(wt, '.', ran, retries);
+    for (const cmd of after) { sh(wt, cmd, retries); ran.push(cmd); }
   }
 
-  // A move that never touches an npm-tag pin leaves a worktree with no node_modules, and a
-  // verify command that needs one fails before it says anything about what it verifies. Where a
-  // lockfile sits and no node_modules answers it, `npm ci` runs once, at the worktree root and at
-  // every directory a verify command names with `--prefix`; where node_modules is already there —
-  // an npm-tag pin's own `npm install` left it — nothing runs twice.
+  // A step that runs in a worktree needs the packages its lockfile names, and a move that never
+  // touches an npm-tag pin leaves none: a pin's `after` steps and the verify commands fail before
+  // they say anything about what they build or verify. So where a lockfile sits and no
+  // node_modules answers it, `npm ci` runs once, in the worktree root before the first `after`
+  // step, and again for every directory a verify command names with `--prefix`; where
+  // node_modules is already there, an npm-tag pin's own `npm install` having left it, nothing
+  // runs twice.
+  function installAt(wt, dir, ran, retries) {
+    const base = dir === '.' ? wt : join(wt, dir);
+    if (!existsSync(join(base, 'package-lock.json')) || existsSync(join(base, 'node_modules'))) return;
+    const cmd = dir === '.' ? 'npm ci' : `npm ci --prefix ${dir}`;
+    sh(wt, cmd, retries);
+    ran.push(cmd);
+  }
+
   function installForVerify(wt, verify, ran, retries) {
-    const install = (dir) => {
-      const base = dir === '.' ? wt : join(wt, dir);
-      if (!existsSync(join(base, 'package-lock.json')) || existsSync(join(base, 'node_modules'))) return;
-      const cmd = dir === '.' ? 'npm ci' : `npm ci --prefix ${dir}`;
-      sh(wt, cmd, retries);
-      ran.push(cmd);
-    };
-    install('.');
+    installAt(wt, '.', ran, retries);
     const dirs = [...new Set([...verify.join(' ').matchAll(/--prefix[= ]+(\S+)/g)].map((m) => m[1]))];
-    for (const dir of dirs) install(dir);
+    for (const dir of dirs) installAt(wt, dir, ran, retries);
   }
 
   function rewriteWorkflows(wt, tag) {
