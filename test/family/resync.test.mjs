@@ -12,13 +12,17 @@ import { renderRecord } from '../../family/render.mjs';
 
 const git = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' }).trim();
 
-test('the choice is all or chain numbers, with an optional dry run', () => {
+test('the choice is all, chain numbers or member names, with an optional dry run', () => {
   assert.deepEqual(parseArgs(['r.json', 'all']), { file: 'r.json', selection: 'all', dryRun: false, force: false });
   assert.deepEqual(parseArgs(['r.json', '3', '5', '--dry-run']), { file: 'r.json', selection: [3, 5], dryRun: true, force: false });
   assert.deepEqual(parseArgs(['r.json', 'all', '--force']), { file: 'r.json', selection: 'all', dryRun: false, force: true });
+  assert.deepEqual(parseArgs(['r.json', 'companygraph/mental-model']), { file: 'r.json', selection: ['companygraph/mental-model'], dryRun: false, force: false });
+  assert.deepEqual(parseArgs(['r.json', '3', 'o/site', 'o/server']), { file: 'r.json', selection: [3, 'o/site', 'o/server'], dryRun: false, force: false });
   assert.equal(parseArgs(['r.json']), null);
   assert.equal(parseArgs(['r.json', 'x']), null);
   assert.equal(parseArgs(['r.json', '0']), null);
+  assert.equal(parseArgs(['r.json', 'o/site/extra']), null);
+  assert.equal(parseArgs(['r.json', 'all', 'o/site']), null);
 });
 
 test('--clean-dry-runs takes no report argument', () => {
@@ -292,4 +296,9 @@ test('the entry installs no signal handler, so a signal still stops the run', ()
   const before = [process.listenerCount('SIGINT'), process.listenerCount('SIGTERM')];
   entry({ list: () => [] }).run();
   assert.deepEqual([process.listenerCount('SIGINT'), process.listenerCount('SIGTERM')], before);
+});
+
+test('the run record names what a run picking members left for a later run', () => {
+  assert.match(renderRecord([{ repo: 'o/server', status: 'done' }], '2026-10-09', false, ['o/site', 'o/web']), /\n\nLeft for a later run: o\/site and o\/web\.\n$/);
+  assert.doesNotMatch(renderRecord([{ repo: 'o/server', status: 'done' }], '2026-10-09', false, []), /Left for a later run/);
 });

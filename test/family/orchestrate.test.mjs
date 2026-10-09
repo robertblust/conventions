@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { orchestrate, nextMinor } from '../../family/orchestrate.mjs';
+import { orchestrate, nextMinor, membersOf, leftBehind } from '../../family/orchestrate.mjs';
 import { assessFamily } from '../../family/report.mjs';
 import { KINDS } from '../../family/pins.mjs';
 import { commitMessage } from '../../family/words.mjs';
@@ -293,4 +293,68 @@ test('a member that went through on a retry is done, and its record names each r
   const server = record.find((r) => r.repo === 'o/server');
   assert.equal(server.status, 'done');
   assert.deepEqual(server.retries, ['`npm test` failed once (fetch failed), passed on retry', 'the required check `verify` failed once, passed on rerun']);
+});
+
+test('a named member moves alone: nothing downstream runs, and it is not released', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  const record = orchestrate({ report, selection: ['o/server'], github, member, date: '2026-09-28' });
+  assert.deepEqual(member.calls.map((c) => `${c.op} ${c.repo} ${c.pins?.join(',') ?? c.tag}`), ['update o/server o/meta@v2.0.0']);
+  assert.deepEqual(record.map((r) => `${r.repo} ${r.status}`), ['o/server done']);
+  assert.deepEqual(leftBehind(report, ['o/server']), ['o/site']);
+});
+
+test('a name and a chain mix: the chain releases what it takes, the name adds its member', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const site = report.chains.find((c) => c.taker === 'o/site' && c.upstream === 'o/other').n;
+  const member = fakeMember(github);
+  orchestrate({ report, selection: ['o/server', site], github, member, date: '2026-09-28' });
+  assert.deepEqual(member.calls.map((c) => `${c.op} ${c.repo}`), ['update o/server', 'release o/server', 'update o/site']);
+  const update = member.calls.find((c) => c.op === 'update' && c.repo === 'o/site');
+  assert.deepEqual([...update.pins].sort(), ['o/other@v1.1.0', 'o/server@v1.1.0']);
+});
+
+test('a name given twice, or also a chosen chain\'s taker, runs once', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  orchestrate({ report, selection: ['o/server', 'o/server', pinChain(report, 'o/server')], github, member, date: '2026-09-28' });
+  assert.equal(member.calls.filter((c) => c.op === 'update' && c.repo === 'o/server').length, 1);
+});
+
+test('a name that is no member, or a member with nothing behind, refuses before anything moves', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  assert.throws(() => orchestrate({ report, selection: ['o/nobody'], github, member, date: '2026-09-28' }), (e) => e.choice === true && /no member o\/nobody in the report/.test(e.message));
+  assert.throws(() => orchestrate({ report, selection: ['o/meta'], github, member, date: '2026-09-28' }), (e) => e.choice === true && /o\/meta has no pin behind in the report/.test(e.message));
+  assert.throws(() => orchestrate({ report, selection: [99], github, member, date: '2026-09-28' }), (e) => e.choice === true && /no chain 99/.test(e.message));
+  assert.deepEqual(member.calls, []);
+});
+
+test('membersOf gathers the chains\' steps and the named members', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const { closure, starts } = membersOf(report, ['o/server']);
+  assert.deepEqual([...closure], ['o/server']);
+  assert.equal(starts.size, 1);
+  assert.deepEqual([...membersOf(report, 'all').closure].sort(), ['o/server', 'o/site']);
+});
+
+test('a named member whose only behind pin is its conventions pin moves and is not released', () => {
+  const github = fakeGithub({
+    files: {
+      'robertblust/conventions': {},
+      'o/server': { 'conventions.json': '{"repo":"robertblust/conventions","tag":"v1.0.0"}', 'pins.json': declare([{ kind: 'conventions', file: 'conventions.json', repo: 'robertblust/conventions' }]) },
+      'o/site': { 'package.json': '{"s":"github:o/server#v1.0.0"}', 'pins.json': declare([npm('o/server')]) },
+    },
+    releases: { 'robertblust/conventions': { tag: 'v1.1.0', url: 'uc' }, 'o/server': { tag: 'v1.0.0', url: 'us' } },
+  });
+  const ms = ['robertblust/conventions', 'o/server', 'o/site'].map((repo) => ({ repo }));
+  const report = assessFamily({ github, members: ms, drawing: new Set(['o/site>o/server']), date: '2026-09-28' });
+  const member = fakeMember(github);
+  orchestrate({ report, selection: ['o/server'], github, member, date: '2026-09-28' });
+  assert.deepEqual(member.calls.map((c) => c.op), ['update']);
 });

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// `node family/resync.mjs <report.json> <all | chain numbers…> [--dry-run] [--force]` runs the
-// chains the owner chose from the report and writes dist/resync-run-<date>.md, and .json for a
-// real run. It exits 1 when a member was blocked, so an Action that runs it fails where a person
+// `node family/resync.mjs <report.json> <all | chain numbers | member names…> [--dry-run] [--force]`
+// runs the choice the owner made from the report and writes dist/resync-run-<date>.md, and .json
+// for a real run. A name moves that member alone; a chain number moves its taker and everything
+// downstream. It exits 1 when a member was blocked, so an Action that runs it fails where a person
 // is needed. `node family/resync.mjs --clean-dry-runs` instead clears the throwaway worktrees a
 // dry run left behind, and touches nothing on GitHub. A run holds family-resync.lock in the
 // clone's git directory while it goes, and refuses to start beside another run or beside an open
@@ -11,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { orchestrate } from './orchestrate.mjs';
+import { orchestrate, leftBehind } from './orchestrate.mjs';
 import { realMember } from './member.mjs';
 import { realGithub } from './github.mjs';
 import { gh } from './gh.mjs';
@@ -27,8 +28,9 @@ export function parseArgs(argv) {
   const picks = rest.filter((a) => a !== '--dry-run' && a !== '--force');
   if (!file || !picks.length) return null;
   if (picks.length === 1 && picks[0] === 'all') return { file, selection: 'all', dryRun, force };
-  const selection = picks.map(Number);
-  if (selection.some((n) => !Number.isInteger(n) || n < 1)) return null;
+  // A pick is a chain number or a member's name as REPOSITORIES.md lists it, owner/repo.
+  const selection = picks.map((p) => (/^\d+$/.test(p) ? Number(p) : /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(p) ? p : null));
+  if (selection.some((p) => p === null || p === 0)) return null;
   return { file, selection, dryRun, force };
 }
 
@@ -232,7 +234,7 @@ export function runResync({ report, selection, dryRun, github, member, date, out
   const write = () => {
     mkdirSync(outDir, { recursive: true });
     const out = join(outDir, `resync-run-${date}.md`);
-    writeFileSync(out, renderRecord(record, date, dryRun));
+    writeFileSync(out, renderRecord(record, date, dryRun, leftBehind(report, selection)));
     // The JSON is what a later run the same day reads to know its own pull requests; a dry run
     // opens none, so it leaves a real run's record standing.
     if (!dryRun) writeFileSync(join(outDir, `resync-run-${date}.json`), `${JSON.stringify(record, null, 2)}\n`);
@@ -241,7 +243,7 @@ export function runResync({ report, selection, dryRun, github, member, date, out
   try {
     orchestrate({ report, selection, github, member, date, dryRun, log, record });
   } catch (err) {
-    if (!err.message.startsWith('no chain')) console.error(`the run stopped; its record is at ${write()}`);
+    if (!err.choice) console.error(`the run stopped; its record is at ${write()}`);
     throw err;
   }
   return { out: write(), record };
@@ -266,7 +268,7 @@ export function main({
 }) {
   const args = parseArgs(argv);
   if (!args) {
-    error('usage: node family/resync.mjs <report.json> <all | chain numbers…> [--dry-run] [--force]');
+    error('usage: node family/resync.mjs <report.json> <all | chain numbers | member names…> [--dry-run] [--force]');
     error('   or: node family/resync.mjs --clean-dry-runs');
     return 2;
   }
@@ -286,7 +288,7 @@ export function main({
       return record.some((r) => r.status === 'blocked') ? 1 : 0;
     });
   } catch (err) {
-    if (err.refused || err.message.startsWith('no chain')) {
+    if (err.refused || err.choice) {
       error(err.message);
       return 2;
     }

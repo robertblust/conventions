@@ -8,7 +8,7 @@
 // move, though a release an earlier run left undone is still finished. A step or a required check
 // that passed only on its second try leaves the member done, and the record names each one.
 import { readMember, assessPins, releaseBlock, pendingRelease } from './assess.mjs';
-import { releasesIn, edgesOf, NON_PROPAGATING } from './graph.mjs';
+import { releasesIn, edgesOf, downstreamOf, NON_PROPAGATING } from './graph.mjs';
 import { pinKey } from './pins.mjs';
 import { releaseNotes, pendingNotes } from './words.mjs';
 
@@ -18,16 +18,43 @@ export const nextMinor = (tag) => {
   return `v${m[1]}.${Number(m[2]) + 1}.0`;
 };
 
-export function orchestrate({ report, selection, github, member, date, dryRun = false, log = () => {}, record = [] }) {
-  const chosen = selection === 'all'
-    ? report.chains
-    : selection.map((n) => {
-        const c = report.chains.find((c) => c.n === n);
-        if (!c) throw new Error(`no chain ${n} in the report`);
-        return c;
-      });
+// A choice the report cannot answer stops the run before it moves anything.
+export const choiceError = (message) => Object.assign(new Error(message), { choice: true });
+
+// The run's members from the owner's choice: each chosen chain's steps, and each named member
+// alone. `starts` are the pins the choice itself moves; a member reached through `closure` also
+// moves a pin whose upstream the run moves before it.
+export function membersOf(report, selection) {
+  const picks = selection === 'all' ? report.chains.map((c) => c.n) : selection;
+  const chosen = [...new Set(picks.filter((p) => typeof p === 'number'))].map((n) => {
+    const c = report.chains.find((c) => c.n === n);
+    if (!c) throw choiceError(`no chain ${n} in the report`);
+    return c;
+  });
   const starts = new Set(chosen.map((c) => pinKey(c)));
   const closure = new Set(chosen.flatMap((c) => c.steps.flat()));
+  for (const name of new Set(picks.filter((p) => typeof p === 'string'))) {
+    if (!report.members.some((m) => m.repo === name)) throw choiceError(`no member ${name} in the report`);
+    const behind = report.pins.filter((p) => p.taker === name && p.status === 'behind' && p.entry);
+    if (!behind.length) throw choiceError(`${name} has no pin behind in the report`);
+    for (const p of behind) starts.add(pinKey(p));
+    closure.add(name);
+  }
+  return { chosen, starts, closure };
+}
+
+// The members downstream of what a choice names that it does not move itself, so the run record
+// says what the next run would take. A choice of chains alone leaves nothing behind.
+export function leftBehind(report, selection) {
+  if (selection === 'all') return [];
+  const { closure } = membersOf(report, selection);
+  const names = selection.filter((p) => typeof p === 'string');
+  const below = new Set(names.flatMap((n) => [...downstreamOf(n, report.edges)]));
+  return [...below].filter((r) => !closure.has(r)).sort();
+}
+
+export function orchestrate({ report, selection, github, member, date, dryRun = false, log = () => {}, record = [] }) {
+  const { starts, closure } = membersOf(report, selection);
   const managedEdges = edgesOf(report.pins.filter((p) => p.entry));
   const levelOf = new Map(report.members.map((m) => [m.repo, m.level]));
   const family = new Set(report.members.map((m) => m.repo));
