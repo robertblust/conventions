@@ -308,7 +308,7 @@ function handWorld(shas, { base = '{"t":"github:robertblust/tokens#v1.0.0"}', me
   gh.files['robertblust/design']['pins.json'] = JSON.stringify({ pins: [{ kind: 'npm-tag', file: 'package.json', repo: 'robertblust/tokens' }] });
   if (base !== null) gh.files['robertblust/design']['package.json@b12'] = base;
   gh.files['robertblust/design']['package.json@m12'] = merge;
-  const pull = { number: 12, title: 'Takes tokens v2.0.0', url: 'https://github.com/robertblust/design/pull/12', head: 'tokens-2', base: 'b12', merge: 'm12' };
+  const pull = { number: 12, title: 'Takes tokens v2.0.0', url: 'https://github.com/robertblust/design/pull/12', head: 'tokens-2', base: 'main', merge: 'm12' };
   gh.commits['robertblust/design:hand'] = { subject: 'Takes tokens v2.0.0', parents: 1, parent: 'p-hand', files: ['package.json', 'package-lock.json'] };
   gh.commits['robertblust/design:fix'] = { subject: 'The token test follows v2.0.0', parents: 1, parent: 'p-fix', files: ['test/tokens.test.mjs'] };
   gh.commits['robertblust/design:m12'] = { subject: 'Merge pull request #12', parents: 2, parent: 'b12', files: [] };
@@ -335,6 +335,34 @@ test('a pull request whose pin value cannot be read blocks', () => {
   assert.match(releaseBlock(handWorld(['hand'], { base: null }), 'robertblust/design'), /^unreleased work on main: 1 commit since v2\.1\.0, 1 commit could not be read/);
 });
 
+test('a pull request that adds a dependency on a family member moved no pin and blocks', () => {
+  const gh = handWorld(['hand', 'fix'], { base: '{"x":"github:someone/else#v1"}' });
+  assert.equal(releaseBlock(gh, 'robertblust/design'), 'unreleased work on main: 2 commits since v2.1.0');
+  assert.equal(pendingRelease(gh, 'robertblust/design'), false);
+  assert.deepEqual(handPulls(gh, 'robertblust/design'), []);
+});
+
+test('a pull request that removes a dependency on a family member moved no pin and blocks', () => {
+  const gh = handWorld(['hand', 'fix'], { merge: '{"x":"github:someone/else#v1"}' });
+  assert.equal(releaseBlock(gh, 'robertblust/design'), 'unreleased work on main: 2 commits since v2.1.0');
+  assert.equal(pendingRelease(gh, 'robertblust/design'), false);
+  assert.deepEqual(handPulls(gh, 'robertblust/design'), []);
+});
+
+test('a pull request merged into a branch other than main moved no pin and blocks', () => {
+  const gh = handWorld(['hand', 'fix']);
+  for (const sha of ['hand', 'fix']) gh.pullRecords[`robertblust/design:${sha}`] = [{ ...gh.pullRecords[`robertblust/design:${sha}`][0], base: 'tokens' }];
+  assert.equal(releaseBlock(gh, 'robertblust/design'), 'unreleased work on main: 2 commits since v2.1.0');
+  assert.equal(pendingRelease(gh, 'robertblust/design'), false);
+  assert.deepEqual(handPulls(gh, 'robertblust/design'), []);
+});
+
+test('a hand pin move beside a hand re-sync makes a release pending', () => {
+  const gh = handWorld(['vend', 'hand', 'fix']);
+  assert.equal(releaseBlock(gh, 'robertblust/design'), null);
+  assert.equal(pendingRelease(gh, 'robertblust/design'), true);
+});
+
 test('a commit in two pull requests counts as the run\'s when one of them moved a pin', () => {
   const gh = handWorld(['hand']);
   // #11 merged on its own and left the pin where it was; only #12 moved it.
@@ -342,7 +370,7 @@ test('a commit in two pull requests counts as the run\'s when one of them moved 
   gh.commits['robertblust/design:m11'] = { subject: 'Merge pull request #11', parents: 2, parent: 'b11', files: [] };
   gh.files['robertblust/design']['package.json@b11'] = same;
   gh.files['robertblust/design']['package.json@m11'] = same;
-  gh.pullRecords['robertblust/design:hand'] = [{ number: 11, title: 'Other', url: 'u11', head: 'other', base: 'b11', merge: 'm11' }, ...gh.pullRecords['robertblust/design:hand']];
+  gh.pullRecords['robertblust/design:hand'] = [{ number: 11, title: 'Other', url: 'u11', head: 'other', base: 'main', merge: 'm11' }, ...gh.pullRecords['robertblust/design:hand']];
   assert.equal(releaseBlock(gh, 'robertblust/design'), null);
   assert.deepEqual(handPulls(gh, 'robertblust/design').map((p) => p.number), [12]);
 });
@@ -367,7 +395,8 @@ test('a hand move of only the conventions pin is a re-sync, not a pin move', () 
 
 test('a pin move is judged against the commit the merge followed, not the pull request\'s base', () => {
   const gh = handWorld(['hand', 'fix']);
-  // A stacked layer: its base still shows the old value, but the merge's first parent already holds the new one.
+  // A stacked layer: its base still shows the old value, but the merge's first parent already
+  // holds the new one.
   gh.commits['robertblust/design:m12'] = { subject: 'Merge pull request #12', parents: 2, parent: 'p12', files: [] };
   gh.files['robertblust/design']['package.json@p12'] = '{"t":"github:robertblust/tokens#v2.0.0"}';
   assert.equal(releaseBlock(gh, 'robertblust/design'), 'unreleased work on main: 2 commits since v2.1.0');
@@ -389,7 +418,7 @@ function oldResyncWorld(pins) {
   const gh = resyncWorld(since(['in']));
   gh.files['robertblust/design']['pins.json'] = JSON.stringify({ pins });
   gh.commits['robertblust/design:m5'] = { subject: 'Merge pull request #5', parents: 2, parent: 'b5', files: [] };
-  gh.pullRecords['robertblust/design:in'] = [{ number: 5, title: 'Takes conventions v1.36.0', url: 'u5', head: 'conv', base: 'b5', merge: 'm5' }];
+  gh.pullRecords['robertblust/design:in'] = [{ number: 5, title: 'Takes conventions v1.36.0', url: 'u5', head: 'conv', base: 'main', merge: 'm5' }];
   return gh;
 }
 

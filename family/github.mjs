@@ -33,7 +33,7 @@ export function realGithub() {
     pullsOf(repo, sha) {
       return (json(`repos/${repo}/commits/${sha}/pulls`) ?? [])
         .filter((p) => p.head.repo?.full_name === repo && p.merged_at)
-        .map((p) => ({ number: p.number, title: p.title, url: p.html_url, head: p.head.ref, base: p.base.sha, merge: p.merge_commit_sha }));
+        .map((p) => ({ number: p.number, title: p.title, url: p.html_url, head: p.head.ref, base: p.base.ref, merge: p.merge_commit_sha }));
     },
     commit(repo, sha) {
       const c = found(repo, `repos/${repo}/commits/${sha}`);

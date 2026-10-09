@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-// `node family/resync.mjs <report.json> <all | chain numbers | member names…> [--dry-run] [--force]`
-// runs the choice the owner made from the report and writes dist/resync-run-<date>.md, and .json
-// for a real run. A name moves that member alone; a chain number moves its taker and everything
-// downstream. It exits 1 when a member was blocked, so an Action that runs it fails where a person
-// is needed. `node family/resync.mjs --clean-dry-runs` instead clears the throwaway worktrees a
-// dry run left behind, and touches nothing on GitHub. A run holds family-resync.lock in the
-// clone's git directory while it goes, and refuses to start beside another run or beside an open
-// resync pull request its own record of the day does not name, which `--force` overrides.
+// `node family/resync.mjs <report.json> <pick…> [--dry-run] [--force]`, where a pick is `all`, a
+// chain number or a member's name, runs the choice the owner made from the report and writes
+// dist/resync-run-<date>.md, and .json for a real run. A name moves that member alone; a chain
+// number moves its taker and everything downstream. It exits 1 when a member was blocked, so an
+// Action that runs it fails where a person is needed. `node family/resync.mjs --clean-dry-runs`
+// instead clears the throwaway worktrees a dry run left behind, and touches nothing on GitHub. A
+// run holds family-resync.lock in the clone's git directory while it goes, and refuses to start
+// beside another run or beside an open resync pull request its own record of the day does not name,
+// which `--force` overrides.
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, renameSync, linkSync, statSync, realpathSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -249,12 +250,12 @@ export function runResync({ report, selection, dryRun, github, member, date, out
   return { out: write(), record };
 }
 
-// The command, as a function of its arguments and of what it reaches, so a test can stub GitHub
-// and the members. It answers the exit code: 0 for a run with nothing blocked, 1 for a run that
-// blocked a member, 2 for a usage error, a chain or a member the report does not hold, or a refusal. It
-// installs no signal handler: the run waits in child processes, where a handler would never run
-// and would only keep the signal from ending the run, and a killed run's lock is taken over the
-// next time.
+// The command, as a function of its arguments and of what it reaches, so a test can stub GitHub and
+// the members. It answers the exit code: 0 for a run with nothing blocked, 1 for a run that blocked
+// a member, 2 for a usage error, a chain or a member the report does not hold, or a refusal. It
+// installs no signal handler: the run waits in child processes, where a handler would never run and
+// would only keep the signal from ending the run, and a killed run's lock is taken over the next
+// time.
 export function main({
   argv,
   here = HERE,

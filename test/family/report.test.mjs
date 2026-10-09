@@ -79,12 +79,12 @@ test('a pending chain names the hand pull requests its release would carry', () 
   github.files['robertblust/design']['package.json@m7'] = '{"t":"github:robertblust/tokens#v2.0.0"}';
   github.compares['robertblust/design:v2.1.0...main'] = { aheadBy: 1, shas: ['h1'], files: [] };
   github.commits['robertblust/design:m7'] = { subject: 'Merge pull request #7', parents: 2, parent: 'b7', files: [] };
-  github.pullRecords['robertblust/design:h1'] = [{ number: 7, title: 'Takes tokens v2.0.0', url: 'u7', head: 'tokens-2', base: 'b7', merge: 'm7' }];
+  github.pullRecords['robertblust/design:h1'] = [{ number: 7, title: 'Takes tokens v2.0.0', url: 'u7', head: 'tokens-2', base: 'main', merge: 'm7' }];
   const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
   const chain = r.chains.find((c) => c.kind === 'release' && c.taker === 'robertblust/design');
   assert.deepEqual(chain.pulls, [7]);
   assert.match(renderReport(r), /\n\d\. robertblust\/design has unreleased resync work, carrying #7 made by hand → /);
-  github.pullRecords['robertblust/design:h2'] = [{ number: 9, title: 'Takes tokens v3.0.0', url: 'u9', head: 'tokens-3', base: 'b7', merge: 'm7' }];
+  github.pullRecords['robertblust/design:h2'] = [{ number: 9, title: 'Takes tokens v3.0.0', url: 'u9', head: 'tokens-3', base: 'main', merge: 'm7' }];
   github.compares['robertblust/design:v2.1.0...main'] = { aheadBy: 2, shas: ['h1', 'h2'], files: [] };
   assert.match(renderReport(assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' })), /carrying #7 and #9 made by hand → /);
 });
@@ -162,7 +162,7 @@ test('a hand pin move is marked in the commit list', () => {
   github.files['robertblust/design']['package.json@b1'] = '{"m":"github:robertblust/meta#v1.0.0"}';
   github.files['robertblust/design']['package.json@m1'] = '{"m":"github:robertblust/meta#v2.0.0"}';
   github.commits['robertblust/design:m1'] = { subject: 'Merge pull request #1', parents: 2, files: [], parent: 'b1' };
-  github.pullRecords['robertblust/design:s1'] = [{ number: 1, title: 'Takes meta v2.0.0', url: 'u1', head: 'meta-2', base: 'b1', merge: 'm1' }];
+  github.pullRecords['robertblust/design:s1'] = [{ number: 1, title: 'Takes meta v2.0.0', url: 'u1', head: 'meta-2', base: 'main', merge: 'm1' }];
   const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
   assert.match(renderReport(r), /\n  - s1 Takes meta v2\.0\.0 \(pin move\)\n  - s2 Tokens spacing\n/);
 });

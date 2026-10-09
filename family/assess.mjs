@@ -118,14 +118,17 @@ export function assessPins(github, member, family, cache = new Map()) {
   return pins;
 }
 
-// Whether a merged pull request moved one of the member's declared pins other than the
-// conventions pins, which a hand move owes no release for: the value a pin reads in its file
-// differs between the merge commit's first parent, the commit the merge followed (a stacked
-// pull request's base is not that commit), and the merge. A member with no such pin is not asked
-// anything, the merge commit is not read. Every pin that reads at both refs is judged first; only
-// when none moved and one could not be read does it throw, and the caller treats that as a move
-// it could not prove: a commit that only re-synced stays a re-sync, any other counts as work.
+// Whether a pull request merged into main moved one of the member's declared pins other than
+// the conventions pins, which a hand move owes no release for: the pin reads a value in its file
+// at both the merge commit's first parent, the commit the merge followed (a stacked pull
+// request's base is not that commit), and the merge, and the two differ. A pin added or removed
+// has not moved, so a pull request that only brings in or drops a dependency is work. For a
+// member with no such pin, the merge commit and the pin files are not read. Every pin whose file
+// reads at both refs is judged first; only when none moved and a file could not be read does it
+// throw, and the caller treats that as a move it could not prove: a commit that only re-synced
+// stays a re-sync, any other counts as work.
 function movedPin(github, repo, pull, declared) {
+  if (pull.base !== 'main') return false;
   const pins = (declared?.pins ?? []).filter((p) => !NON_PROPAGATING.has(p.kind));
   if (!pins.length) return false;
   const before = github.commit(repo, pull.merge).parent;
@@ -137,7 +140,9 @@ function movedPin(github, repo, pull, declared) {
         if (text === null) throw new Error(`${repo}: ${d.file} at ${ref} cannot be read`);
         return KINDS[d.kind].read(text, d.repo).join(',');
       };
-      if (read(before) !== read(pull.merge)) return true;
+      const was = read(before);
+      const is = read(pull.merge);
+      if (was && is && was !== is) return true;
     } catch (e) {
       unreadable ??= e;
     }
@@ -229,11 +234,17 @@ export function releaseBlock(github, repo) {
   return `unreleased work on main: ${plural(s.work, 'commit')} since ${s.rel.tag}${why}`;
 }
 
-// The hand pull requests a release of this member would carry, for its notes.
-export function handPulls(github, repo) {
+// What a release of this member would carry, for its notes: the hand pull requests, and whether
+// a resync pull request other than a vendored one merged pins, so the notes credit the resync
+// only where it moved something.
+export function carriedWork(github, repo) {
   const s = scanUnreleased(github, repo);
-  return s.rel && s.work === 0 ? s.carried : [];
+  if (!s.rel || s.work > 0) return { pulls: [], resynced: false };
+  return { pulls: s.carried, resynced: s.commits.some((c) => c.resync && !c.vendored) };
 }
+
+// The hand pull requests a release of this member would carry.
+export const handPulls = (github, repo) => carriedWork(github, repo).pulls;
 
 // What the conventions sync writes into a member, and the files beside it a member keeps by
 // hand that no consumer builds from: pins.json, the conventions workflow, the excludes in
@@ -301,10 +312,10 @@ export function mainState(github, repo) {
 
 // A member whose main holds only the run's own work since its last release, a resync pull
 // request or a pin a person moved by hand, has a release a rerun can finish, though nothing in it
-// is behind; a vendored re-sync alone owes none.
+// is behind. A re-sync, by the run or by hand, may sit beside that work, since it owes no release
+// of its own; a re-sync alone owes none. With no work left, every other commit is one of these.
 export function pendingRelease(github, repo) {
   const s = scanUnreleased(github, repo);
   if (!s.rel || s.aheadBy <= 0 || s.work > 0) return false;
-  if (!s.commits.every((c) => c.resync || c.pinMove)) return false;
   return s.commits.some((c) => c.pinMove || (c.resync && !c.vendored));
 }

@@ -41,4 +41,13 @@ export function withCarried(notes, pulls) {
   return [first.replace(' and changes nothing else', ''), lines, ...rest].join('\n\n');
 }
 
-export const pendingNotes = () => 'This release carries pins the family resync already merged and changes nothing else.\n\nNothing breaks. A repository that takes this one re-pins it and changes nothing else.\n';
+const NOTHING_BREAKS = 'Nothing breaks. A repository that takes this one re-pins it and changes nothing else.';
+
+// The notes of a release a run finishes over what is already on main: the pins a resync pull
+// request merged, the hand pull requests that moved pins, or both. Each is named only where it is
+// there, so a release that carries hand work alone does not credit the resync.
+export function pendingNotes({ resynced = true, pulls = [] } = {}) {
+  if (resynced || !pulls.length) return withCarried(`This release carries pins the family resync already merged and changes nothing else.\n\n${NOTHING_BREAKS}\n`, pulls);
+  const lines = pulls.map((p) => `[#${p.number}](${p.url}): ${p.title.replace(/\.$/, '')}.`).join('\n');
+  return `This release carries pins moved by hand in the pull requests below.\n\n${lines}\n\n${NOTHING_BREAKS}\n`;
+}

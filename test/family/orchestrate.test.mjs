@@ -376,14 +376,15 @@ test('a named member whose only behind pin is its conventions pin moves and is n
   assert.deepEqual(leftBehind(report, ['o/server']), []);
 });
 
-// o/server's main already holds o/meta v2.0.0 from hand pull request #7; its last release is v1.0.0.
+// o/server's main already holds o/meta v2.0.0 from hand pull request #7; its last release is
+// v1.0.0.
 function handMoved(github) {
   github.files['o/server']['package.json'] = '{"m":"github:o/meta#v2.0.0"}';
   github.files['o/server']['package.json@b7'] = '{"m":"github:o/meta#v1.0.0"}';
   github.files['o/server']['package.json@m7'] = '{"m":"github:o/meta#v2.0.0"}';
   github.compares['o/server:v1.0.0...main'] = { aheadBy: 1, shas: ['h1'], files: [] };
   github.commits['o/server:m7'] = { subject: 'Merge pull request #7', parents: 2, parent: 'b7', files: [] };
-  github.pullRecords['o/server:h1'] = [{ number: 7, title: 'Takes meta v2.0.0', url: 'u7', head: 'meta-2', base: 'b7', merge: 'm7' }];
+  github.pullRecords['o/server:h1'] = [{ number: 7, title: 'Takes meta v2.0.0', url: 'u7', head: 'meta-2', base: 'main', merge: 'm7' }];
   return github;
 }
 
@@ -394,8 +395,19 @@ test('a member moved by hand is released by the next run, its notes naming the p
   orchestrate({ report, selection: [releaseChain(report, 'o/server')], github, member, date: '2026-09-28' });
   const rel = member.calls.find((c) => c.op === 'release' && c.repo === 'o/server');
   assert.equal(rel.tag, 'v1.1.0');
-  assert.match(rel.notes, /\n\nIt also carries \[#7\]\(u7\), made by hand: Takes meta v2\.0\.0\.\n\n/);
+  assert.equal(rel.notes, 'This release carries pins moved by hand in the pull requests below.\n\n[#7](u7): Takes meta v2.0.0.\n\nNothing breaks. A repository that takes this one re-pins it and changes nothing else.\n');
   assert.ok(member.calls.some((c) => c.op === 'update' && c.repo === 'o/site'));
+});
+
+test('a release that carries a resync merge and a hand pull request says both', () => {
+  const github = handMoved(world());
+  github.compares['o/server:v1.0.0...main'] = { aheadBy: 2, shas: ['r1', 'h1'], files: [] };
+  github.pulls['o/server:r1'] = ['resync-2026-09-27'];
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  orchestrate({ report, selection: [releaseChain(report, 'o/server')], github, member, date: '2026-09-28' });
+  const rel = member.calls.find((c) => c.op === 'release' && c.repo === 'o/server');
+  assert.match(rel.notes, /^This release carries pins the family resync already merged\.\n\nIt also carries \[#7\]\(u7\), made by hand: Takes meta v2\.0\.0\.\n\nNothing breaks\./);
 });
 
 test('a dry run over a member moved by hand writes the same notes', () => {
@@ -403,5 +415,5 @@ test('a dry run over a member moved by hand writes the same notes', () => {
   const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
   const member = fakeMember(github);
   orchestrate({ report, selection: [releaseChain(report, 'o/server')], github, member, date: '2026-09-28', dryRun: true });
-  assert.match(member.calls.find((c) => c.op === 'release').notes, /made by hand: Takes meta v2\.0\.0\./);
+  assert.match(member.calls.find((c) => c.op === 'release').notes, /^This release carries pins moved by hand in the pull requests below\.\n\n\[#7\]\(u7\): Takes meta v2\.0\.0\./);
 });

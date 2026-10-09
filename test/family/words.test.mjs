@@ -16,8 +16,14 @@ test('a title ending in a period gives one period, not two', () => {
   assert.match(withCarried(pendingNotes(), [pull('Takes meta v2.0.0')]), /made by hand: Takes meta v2\.0\.0\.\n/);
 });
 
+test('pending notes credit the resync only where a resync pull request merged pins', () => {
+  assert.equal(pendingNotes({ resynced: false, pulls: [pull('Takes meta v2.0.0.')] }), 'This release carries pins moved by hand in the pull requests below.\n\n[#7](u7): Takes meta v2.0.0.\n\nNothing breaks. A repository that takes this one re-pins it and changes nothing else.\n');
+  assert.equal(pendingNotes({ resynced: true, pulls: [pull('Takes meta v2.0.0')] }), withCarried(pendingNotes(), [pull('Takes meta v2.0.0')]));
+  assert.equal(pendingNotes({ resynced: true, pulls: [] }), pendingNotes());
+});
+
 test('notes that carry a hand pull request no longer say they change nothing else', () => {
-  const pending = withCarried(pendingNotes(), [pull('Takes meta v2.0.0')]);
+  const pending = pendingNotes({ resynced: true, pulls: [pull('Takes meta v2.0.0')] });
   assert.match(pending, /^This release carries pins the family resync already merged\.\n\nIt also carries \[#7\]\(u7\), made by hand: Takes meta v2\.0\.0\.\n\nNothing breaks\./);
   const taken = withCarried(releaseNotes([pin]), [pull('Takes meta v2.0.0')]);
   assert.match(taken, /^This release takes newer pins: o\/meta in `package.json` from v1\.0\.0 to v2\.0\.0\. Their notes are at um\.\n\nIt also carries/);
