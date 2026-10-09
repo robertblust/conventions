@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { orchestrate, nextMinor } from '../../family/orchestrate.mjs';
+import { orchestrate, nextMinor, membersOf, leftBehind } from '../../family/orchestrate.mjs';
 import { assessFamily } from '../../family/report.mjs';
 import { KINDS } from '../../family/pins.mjs';
 import { commitMessage } from '../../family/words.mjs';
@@ -293,4 +293,127 @@ test('a member that went through on a retry is done, and its record names each r
   const server = record.find((r) => r.repo === 'o/server');
   assert.equal(server.status, 'done');
   assert.deepEqual(server.retries, ['`npm test` failed once (fetch failed), passed on retry', 'the required check `verify` failed once, passed on rerun']);
+});
+
+test('a named member moves alone: nothing downstream runs, and it is not released', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  const record = orchestrate({ report, selection: ['o/server'], github, member, date: '2026-09-28' });
+  assert.deepEqual(member.calls.map((c) => `${c.op} ${c.repo} ${c.pins?.join(',') ?? c.tag}`), ['update o/server o/meta@v2.0.0']);
+  assert.deepEqual(record.map((r) => `${r.repo} ${r.status}`), ['o/server done']);
+  assert.deepEqual(leftBehind(report, ['o/server']), ['o/site']);
+});
+
+test('a name and a chain mix: the chain releases what it takes, the name adds its member', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const site = report.chains.find((c) => c.taker === 'o/site' && c.upstream === 'o/other').n;
+  const member = fakeMember(github);
+  orchestrate({ report, selection: ['o/server', site], github, member, date: '2026-09-28' });
+  assert.deepEqual(member.calls.map((c) => `${c.op} ${c.repo}`), ['update o/server', 'release o/server', 'update o/site']);
+  const update = member.calls.find((c) => c.op === 'update' && c.repo === 'o/site');
+  assert.deepEqual([...update.pins].sort(), ['o/other@v1.1.0', 'o/server@v1.1.0']);
+});
+
+test('a name given twice, or also a chosen chain\'s taker, runs once', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  orchestrate({ report, selection: ['o/server', 'o/server', pinChain(report, 'o/server')], github, member, date: '2026-09-28' });
+  assert.deepEqual(member.calls.map((c) => `${c.op} ${c.repo}`), ['update o/server', 'release o/server', 'update o/site']);
+});
+
+test('a name that is no member, or a member with nothing behind, refuses before anything moves', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  assert.throws(() => orchestrate({ report, selection: ['o/nobody'], github, member, date: '2026-09-28' }), (e) => e.choice === true && /no member o\/nobody in the report/.test(e.message));
+  assert.throws(() => orchestrate({ report, selection: ['o/meta'], github, member, date: '2026-09-28' }), (e) => e.choice === true && /o\/meta has no pin behind in the report/.test(e.message));
+  assert.throws(() => orchestrate({ report, selection: [99], github, member, date: '2026-09-28' }), (e) => e.choice === true && /no chain 99/.test(e.message));
+  assert.deepEqual(member.calls, []);
+});
+
+test('a named member on a cycle has no level to move at and is refused before anything moves', () => {
+  const github = fakeGithub({
+    files: {
+      'o/a': { 'package.json': '{"b":"github:o/b#v1.0.0"}', 'pins.json': declare([npm('o/b')]) },
+      'o/b': { 'package.json': '{"a":"github:o/a#v1.0.0"}', 'pins.json': declare([npm('o/a')]) },
+    },
+    releases: { 'o/a': { tag: 'v1.1.0', url: 'ua' }, 'o/b': { tag: 'v1.1.0', url: 'ub' } },
+  });
+  const ms = ['o/a', 'o/b'].map((repo) => ({ repo }));
+  const report = assessFamily({ github, members: ms, drawing: new Set(['o/a>o/b', 'o/b>o/a']), date: '2026-09-28' });
+  const member = fakeMember(github);
+  assert.throws(() => orchestrate({ report, selection: ['o/a'], github, member, date: '2026-09-28' }), (e) => e.choice === true && /^o\/a has no level to move at$/.test(e.message));
+  assert.deepEqual(member.calls, []);
+});
+
+test('membersOf gathers the chains\' steps and the named members', () => {
+  const github = world();
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const { closure, starts } = membersOf(report, ['o/server']);
+  assert.deepEqual([...closure], ['o/server']);
+  assert.equal(starts.size, 1);
+  assert.deepEqual([...membersOf(report, 'all').closure].sort(), ['o/server', 'o/site']);
+});
+
+test('a named member whose only behind pin is its conventions pin moves and is not released', () => {
+  const github = fakeGithub({
+    files: {
+      'robertblust/conventions': {},
+      'o/server': { 'conventions.json': '{"repo":"robertblust/conventions","tag":"v1.0.0"}', 'pins.json': declare([{ kind: 'conventions', file: 'conventions.json', repo: 'robertblust/conventions' }]) },
+      'o/site': { 'package.json': '{"s":"github:o/server#v1.0.0"}', 'pins.json': declare([npm('o/server')]) },
+    },
+    releases: { 'robertblust/conventions': { tag: 'v1.1.0', url: 'uc' }, 'o/server': { tag: 'v1.0.0', url: 'us' } },
+  });
+  const ms = ['robertblust/conventions', 'o/server', 'o/site'].map((repo) => ({ repo }));
+  const report = assessFamily({ github, members: ms, drawing: new Set(['o/site>o/server']), date: '2026-09-28' });
+  const member = fakeMember(github);
+  orchestrate({ report, selection: ['o/server'], github, member, date: '2026-09-28' });
+  assert.deepEqual(member.calls.map((c) => c.op), ['update']);
+  // Its conventions pin offers o/site nothing, so o/site is not left for a later run.
+  assert.deepEqual(leftBehind(report, ['o/server']), []);
+});
+
+// o/server's main already holds o/meta v2.0.0 from hand pull request #7; its last release is
+// v1.0.0.
+function handMoved(github) {
+  github.files['o/server']['package.json'] = '{"m":"github:o/meta#v2.0.0"}';
+  github.files['o/server']['package.json@b7'] = '{"m":"github:o/meta#v1.0.0"}';
+  github.files['o/server']['package.json@m7'] = '{"m":"github:o/meta#v2.0.0"}';
+  github.compares['o/server:v1.0.0...main'] = { aheadBy: 1, shas: ['h1'], files: [] };
+  github.commits['o/server:m7'] = { subject: 'Merge pull request #7', parents: 2, parent: 'b7', files: [] };
+  github.pullRecords['o/server:h1'] = [{ number: 7, title: 'Takes meta v2.0.0', url: 'u7', head: 'meta-2', base: 'main', merge: 'm7' }];
+  return github;
+}
+
+test('a member moved by hand is released by the next run, its notes naming the pull request', () => {
+  const github = handMoved(world());
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  orchestrate({ report, selection: [releaseChain(report, 'o/server')], github, member, date: '2026-09-28' });
+  const rel = member.calls.find((c) => c.op === 'release' && c.repo === 'o/server');
+  assert.equal(rel.tag, 'v1.1.0');
+  assert.equal(rel.notes, 'This release carries pins moved by hand in the pull requests below.\n\n[#7](u7): Takes meta v2.0.0.\n\nNothing breaks. A repository that takes this one re-pins it and changes nothing else.\n');
+  assert.ok(member.calls.some((c) => c.op === 'update' && c.repo === 'o/site'));
+});
+
+test('a release that carries a resync merge and a hand pull request says both', () => {
+  const github = handMoved(world());
+  github.compares['o/server:v1.0.0...main'] = { aheadBy: 2, shas: ['r1', 'h1'], files: [] };
+  github.pulls['o/server:r1'] = ['resync-2026-09-27'];
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  orchestrate({ report, selection: [releaseChain(report, 'o/server')], github, member, date: '2026-09-28' });
+  const rel = member.calls.find((c) => c.op === 'release' && c.repo === 'o/server');
+  assert.match(rel.notes, /^This release carries pins the family resync already merged\.\n\nIt also carries \[#7\]\(u7\), made by hand: Takes meta v2\.0\.0\.\n\nNothing breaks\./);
+});
+
+test('a dry run over a member moved by hand writes the same notes', () => {
+  const github = handMoved(world());
+  const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
+  const member = fakeMember(github);
+  orchestrate({ report, selection: [releaseChain(report, 'o/server')], github, member, date: '2026-09-28', dryRun: true });
+  assert.match(member.calls.find((c) => c.op === 'release').notes, /^This release carries pins moved by hand in the pull requests below\.\n\n\[#7\]\(u7\): Takes meta v2\.0\.0\./);
 });

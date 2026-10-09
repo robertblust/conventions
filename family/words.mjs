@@ -30,4 +30,24 @@ export function releaseNotes(pins) {
   return `This release takes newer pins and changes nothing else: ${moves(pins)}.${notes.length ? ` Their notes are at ${listed(notes)}.` : ''}\n\nNothing breaks. A repository that takes this one re-pins it and changes nothing else.\n`;
 }
 
-export const pendingNotes = () => 'This release carries pins the family resync already merged and changes nothing else.\n\nNothing breaks. A repository that takes this one re-pins it and changes nothing else.\n';
+// The release notes of a member whose unreleased work includes pull requests a person made to
+// move its pins: the run's notes, with one line per pull request after their first paragraph. A
+// hand pull request may change more than its pin, so that paragraph no longer says the release
+// changes nothing else. A title keeps its words, and its own final period gives way to the line's.
+export function withCarried(notes, pulls) {
+  if (!pulls.length) return notes;
+  const lines = pulls.map((p) => `It also carries [#${p.number}](${p.url}), made by hand: ${p.title.replace(/\.$/, '')}.`).join('\n');
+  const [first, ...rest] = notes.split('\n\n');
+  return [first.replace(' and changes nothing else', ''), lines, ...rest].join('\n\n');
+}
+
+const NOTHING_BREAKS = 'Nothing breaks. A repository that takes this one re-pins it and changes nothing else.';
+
+// The notes of a release a run finishes over what is already on main: the pins a resync pull
+// request merged, the hand pull requests that moved pins, or both. Each is named only where it is
+// there, so a release that carries hand work alone does not credit the resync.
+export function pendingNotes({ resynced = true, pulls = [] } = {}) {
+  if (resynced || !pulls.length) return withCarried(`This release carries pins the family resync already merged and changes nothing else.\n\n${NOTHING_BREAKS}\n`, pulls);
+  const lines = pulls.map((p) => `[#${p.number}](${p.url}): ${p.title.replace(/\.$/, '')}.`).join('\n');
+  return `This release carries pins moved by hand in the pull requests below.\n\n${lines}\n\n${NOTHING_BREAKS}\n`;
+}

@@ -68,7 +68,25 @@ test('a member whose main only holds resync work gets a pending release chain', 
   const chain = r.chains.find((c) => c.kind === 'release' && c.taker === 'robertblust/design');
   assert.ok(chain);
   const md = renderReport(r);
-  assert.match(md, /has unreleased resync work/);
+  assert.match(md, /\n\d\. robertblust\/design has unreleased resync work → /);
+  assert.deepEqual(chain.pulls, []);
+});
+
+test('a pending chain names the hand pull requests its release would carry', () => {
+  const github = world();
+  github.files['robertblust/design']['pins.json'] = declare(C, { kind: 'npm-tag', file: 'package.json', repo: 'robertblust/tokens' });
+  github.files['robertblust/design']['package.json@b7'] = '{"t":"github:robertblust/tokens#v1.0.0"}';
+  github.files['robertblust/design']['package.json@m7'] = '{"t":"github:robertblust/tokens#v2.0.0"}';
+  github.compares['robertblust/design:v2.1.0...main'] = { aheadBy: 1, shas: ['h1'], files: [] };
+  github.commits['robertblust/design:m7'] = { subject: 'Merge pull request #7', parents: 2, parent: 'b7', files: [] };
+  github.pullRecords['robertblust/design:h1'] = [{ number: 7, title: 'Takes tokens v2.0.0', url: 'u7', head: 'tokens-2', base: 'main', merge: 'm7' }];
+  const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
+  const chain = r.chains.find((c) => c.kind === 'release' && c.taker === 'robertblust/design');
+  assert.deepEqual(chain.pulls, [7]);
+  assert.match(renderReport(r), /\n\d\. robertblust\/design has unreleased resync work, carrying #7 made by hand → /);
+  github.pullRecords['robertblust/design:h2'] = [{ number: 9, title: 'Takes tokens v3.0.0', url: 'u9', head: 'tokens-3', base: 'main', merge: 'm7' }];
+  github.compares['robertblust/design:v2.1.0...main'] = { aheadBy: 2, shas: ['h1', 'h2'], files: [] };
+  assert.match(renderReport(assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' })), /carrying #7 and #9 made by hand → /);
 });
 
 test('a member taken by tag only through an undeclared pin gets no pending chain', () => {
@@ -132,6 +150,21 @@ test('a blocked member names its unreleased commits under its bullet, marking a 
   assert.equal(m['robertblust/site'].unreleased, null);
   const md = renderReport(r);
   assert.match(md, /- robertblust\/design: unreleased work on main: 1 commit since v2\.1\.0\n  - \[v2\.1\.0\.\.\.main\]\(https:\/\/github\.com\/robertblust\/design\/compare\/v2\.1\.0\.\.\.main\)\n  - s1 Takes conventions v1\.0\.0 \(re-sync only\)\n  - s2 Tokens \\\| spacing\n/);
+});
+
+test('a hand pin move is marked in the commit list', () => {
+  const github = world();
+  github.commits['robertblust/design:s1'] = { subject: 'Takes meta v2.0.0', parents: 1, files: ['package.json'] };
+  github.commits['robertblust/design:s2'] = { subject: 'Tokens spacing', parents: 1, files: ['tokens.css'] };
+  github.files['robertblust/design']['pins.json'] = declare(C, { kind: 'npm-tag', file: 'package.json', repo: 'robertblust/meta' });
+  github.files['robertblust/design']['conventions.json@b1'] = conv('v1.0.0');
+  github.files['robertblust/design']['conventions.json@m1'] = conv('v1.0.0');
+  github.files['robertblust/design']['package.json@b1'] = '{"m":"github:robertblust/meta#v1.0.0"}';
+  github.files['robertblust/design']['package.json@m1'] = '{"m":"github:robertblust/meta#v2.0.0"}';
+  github.commits['robertblust/design:m1'] = { subject: 'Merge pull request #1', parents: 2, files: [], parent: 'b1' };
+  github.pullRecords['robertblust/design:s1'] = [{ number: 1, title: 'Takes meta v2.0.0', url: 'u1', head: 'meta-2', base: 'main', merge: 'm1' }];
+  const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
+  assert.match(renderReport(r), /\n  - s1 Takes meta v2\.0\.0 \(pin move\)\n  - s2 Tokens spacing\n/);
 });
 
 test('the Main section names a red, running or unknown main', () => {

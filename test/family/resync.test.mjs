@@ -12,13 +12,17 @@ import { renderRecord } from '../../family/render.mjs';
 
 const git = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' }).trim();
 
-test('the choice is all or chain numbers, with an optional dry run', () => {
+test('the choice is all, chain numbers or member names, with an optional dry run', () => {
   assert.deepEqual(parseArgs(['r.json', 'all']), { file: 'r.json', selection: 'all', dryRun: false, force: false });
   assert.deepEqual(parseArgs(['r.json', '3', '5', '--dry-run']), { file: 'r.json', selection: [3, 5], dryRun: true, force: false });
   assert.deepEqual(parseArgs(['r.json', 'all', '--force']), { file: 'r.json', selection: 'all', dryRun: false, force: true });
+  assert.deepEqual(parseArgs(['r.json', 'companygraph/mental-model']), { file: 'r.json', selection: ['companygraph/mental-model'], dryRun: false, force: false });
+  assert.deepEqual(parseArgs(['r.json', '3', 'o/site', 'o/server']), { file: 'r.json', selection: [3, 'o/site', 'o/server'], dryRun: false, force: false });
   assert.equal(parseArgs(['r.json']), null);
   assert.equal(parseArgs(['r.json', 'x']), null);
   assert.equal(parseArgs(['r.json', '0']), null);
+  assert.equal(parseArgs(['r.json', 'o/site/extra']), null);
+  assert.equal(parseArgs(['r.json', 'all', 'o/site']), null);
 });
 
 test('--clean-dry-runs takes no report argument', () => {
@@ -252,14 +256,14 @@ test('a member whose open pull requests gh cannot list refuses, naming it and gh
 
 // The entry point, with GitHub and the members stubbed: a report that holds one member and
 // nothing to move, a lock in a temp directory, and a list of open pull requests the test chooses.
-function entry({ list, lock = lockPath() } = {}) {
+function entry({ list, lock = lockPath(), pick = 'all' } = {}) {
   const here = mkdtempSync(join(tmpdir(), 'resync-main-'));
   const github = fakeGithub({ files: { 'o/meta': {} } });
   const report = assessFamily({ github, members: [{ repo: 'o/meta' }], drawing: new Set(), date: '2026-10-01' });
   const file = join(here, 'report.json');
   writeFileSync(file, JSON.stringify(report));
   const said = [];
-  const run = () => main({ argv: [file, 'all'], here, date: '2026-10-01', lockPath: lock, list, github, memberOf: () => ({}), log: () => {}, error: (m) => said.push(m) });
+  const run = () => main({ argv: [file, pick], here, date: '2026-10-01', lockPath: lock, list, github, memberOf: () => ({}), log: () => {}, error: (m) => said.push(m) });
   return { run, said, lock, here };
 }
 
@@ -277,6 +281,15 @@ test('the entry exits 2 on a refusal, says why and leaves no lock', () => {
   assert.equal(existsSync(e.lock), false);
 });
 
+test('the entry exits 2 on a member name the report does not hold, writes nothing and says why', () => {
+  const e = entry({ list: () => [], pick: 'o/nobody' });
+  assert.equal(e.run(), 2);
+  assert.match(e.said.join('\n'), /no member o\/nobody in the report/);
+  assert.equal(existsSync(e.lock), false);
+  assert.equal(existsSync(join(e.here, 'dist/resync-run-2026-10-01.md')), false);
+  assert.equal(existsSync(join(e.here, 'dist/resync-run-2026-10-01.json')), false);
+});
+
 test('the entry exits 2 on a live lock and asks GitHub nothing', () => {
   let asked = false;
   const e = entry({ list: () => { asked = true; return []; } });
@@ -292,4 +305,9 @@ test('the entry installs no signal handler, so a signal still stops the run', ()
   const before = [process.listenerCount('SIGINT'), process.listenerCount('SIGTERM')];
   entry({ list: () => [] }).run();
   assert.deepEqual([process.listenerCount('SIGINT'), process.listenerCount('SIGTERM')], before);
+});
+
+test('the run record names what a run picking members left for a later run', () => {
+  assert.match(renderRecord([{ repo: 'o/server', status: 'done' }], '2026-10-09', false, ['o/site', 'o/web']), /\n\nLeft for a later run: o\/site and o\/web\.\n$/);
+  assert.doesNotMatch(renderRecord([{ repo: 'o/server', status: 'done' }], '2026-10-09', false, []), /Left for a later run/);
 });

@@ -1,7 +1,7 @@
 // The report as Markdown for a person: counts first and what blocks, then whose main is not green,
 // then one table per level, the chains a resync can choose from, and what disagrees. The run
 // record's Note column carries a member's note and each step or check that passed on a retry.
-import { shortV, longDate, plural } from './words.mjs';
+import { shortV, longDate, plural, listed } from './words.mjs';
 
 const cell = (s) => String(s).replace(/\|/g, '\\|').replace(/\n/g, ' ');
 const statusText = (p) => (p.status === 'behind' && p.behindBy ? `behind, ${plural(p.behindBy, 'commit')}` : p.status);
@@ -18,7 +18,7 @@ export function renderReport(data) {
       if (!m.unreleased) continue;
       lines.push(`  - [${m.unreleased.since}...main](${m.unreleased.compare})`);
       if (!m.unreleased.commits) lines.push(`  - the commits could not be read: ${cell(m.unreleased.error)}`);
-      for (const c of m.unreleased.commits ?? []) lines.push(`  - ${c.sha.slice(0, 7)} ${cell(c.subject)}${c.resyncOnly ? ' (re-sync only)' : ''}`);
+      for (const c of m.unreleased.commits ?? []) lines.push(`  - ${c.sha.slice(0, 7)} ${cell(c.subject)}${c.resyncOnly ? ' (re-sync only)' : ''}${c.pinMove ? ' (pin move)' : ''}`);
     }
     lines.push('');
   }
@@ -51,7 +51,7 @@ export function renderReport(data) {
   lines.push('## Chains', '');
   if (!data.chains.length) lines.push('Nothing is behind.');
   for (const c of data.chains) {
-    const head = c.kind === 'release' ? `${c.taker} has unreleased resync work` : `${c.upstream} ${shortV(c.available)}`;
+    const head = c.kind === 'release' ? `${c.taker} has unreleased resync work${c.pulls?.length ? `, carrying ${listed(c.pulls.map((n) => `#${n}`))} made by hand` : ''}` : `${c.upstream} ${shortV(c.available)}`;
     lines.push(`${c.n}. ${head} → ${c.steps.map((s) => s.join(', ')).join(' → ')}`);
   }
   lines.push('');
@@ -63,12 +63,13 @@ export function renderReport(data) {
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
-export function renderRecord(record, date, dryRun) {
+export function renderRecord(record, date, dryRun, left = []) {
   const lines = [`# Family resync run, ${longDate(date)}${dryRun ? ' (dry run)' : ''}`, ''];
   if (!record.length) return `${lines[0]}\n\nThe choice moved nothing.\n`;
   lines.push('| Member | Status | Pull request | Merge | Release | Note |', '| --- | --- | --- | --- | --- | --- |');
   for (const r of record) {
     lines.push(`| ${r.repo} | ${r.status} | ${r.pr ?? ''} | ${r.merge ? shortV(r.merge) : ''} | ${r.release ?? ''} | ${cell([r.reason ?? r.note, ...(r.retries ?? [])].filter(Boolean).join('; '))} |`);
   }
+  if (left.length) lines.push('', `Left for a later run: ${listed(left)}.`);
   return `${lines.join('\n')}\n`;
 }
