@@ -42,18 +42,18 @@ A name that is not a member of `REPOSITORIES.md`, or a member with no pin behind
 
 ## 3. A pin move made by hand is the run's own work
 
-A commit since a member's last release counts as the run's own, and not as work, when it belongs to a merged pull request that moved one of the member's declared pins: the pull request changed a file a `pins.json` entry of the member names, and that pin's value in the file differs between the pull request's base and its merge. Every commit of such a pull request counts, the fix that came with the move included, because the pull request is the person's account of why the move needed it.
+A commit since a member's last release counts as the run's own, and not as work, when it belongs to a merged pull request that moved one of the member's declared pins: the value a `pins.json` entry of the member reads in its file differs between the merge commit's first parent and the merge. The first parent is the commit the merge followed, which is what the pull request changed on main; a stacked layer's base is not that commit, and a layer whose lower pull request had already moved the pin would otherwise count as a move itself. A conventions or service-conventions pin does not count: a hand move of one is a re-sync, which owes no release, as the rule for vendored moves says. Every commit of such a pull request counts, the fix that came with the move included, because the pull request is the person's account of why the move needed it.
 
-Every other commit still counts as work and still blocks, as now: a pull request that moved no pin, and a commit that belongs to no pull request. A pull request whose files or pin values cannot be read counts as work, keeping `releaseBlock`'s rule that blocking is the side a wrong guess can be undone from.
+Every other commit still counts as work and still blocks, as now: a pull request that moved no pin, and a commit that belongs to no pull request. A pull request whose pin values cannot be read counts as work, keeping `releaseBlock`'s rule that blocking is the side a wrong guess can be undone from, unless the commit only re-synced: an unreadable pin fails to prove a move and is no evidence of work. A member with no declared pin that propagates is not asked at all.
 
-The release notes the run writes for such a member are its re-pin notes and one line for each hand pull request they carry: "It also carries #155, made by hand: Takes meta-model v0.88.0", linked, naming the pull request by its title and not paraphrasing it.
+The release notes the run writes for such a member are its re-pin notes and one line for each hand pull request they carry: "It also carries #155, made by hand: Takes meta-model v0.88.0", linked, naming the pull request by its title and not paraphrasing it. A hand pull request may change more than its pin, so the first paragraph of those notes does not say the release changes nothing else.
 
-The report, in its list of a member's unreleased commits, marks such a commit `(pin move)` beside the existing `(re-sync only)`, so the owner sees before a run what it would release and why.
+The report, in its list of a member's unreleased commits, marks such a commit `(pin move)` beside the existing `(re-sync only)`, so the owner sees before a run what it would release and why. The chain that offers the release of a member whose main holds such pull requests names them in its heading.
 
 ## 4. Errors
 
 - A pick that is neither `all`, a positive whole number nor a member's name fails in `parseArgs`, with the usage line.
-- A name not in `REPOSITORIES.md`, or a named member with nothing behind, refuses the run before it moves anything.
+- A name not in `REPOSITORIES.md`, a named member with nothing behind, or a named member on a cycle, which has no level to move at, refuses the run before it moves anything.
 - A pull request that cannot be read leaves its commits counted as work.
 
 ## 5. Tests
