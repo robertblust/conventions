@@ -349,6 +349,20 @@ test('a pull request that removes a dependency on a family member moved no pin a
   assert.deepEqual(handPulls(gh, 'robertblust/design'), []);
 });
 
+test('a pull request that adds a second entry for an upstream at a new value moved no pin and blocks', () => {
+  const gh = handWorld(['hand', 'fix'], { merge: '{"t":"github:robertblust/tokens#v1.0.0","u":"github:robertblust/tokens#v2.0.0"}' });
+  assert.equal(releaseBlock(gh, 'robertblust/design'), 'unreleased work on main: 2 commits since v2.1.0');
+  assert.equal(pendingRelease(gh, 'robertblust/design'), false);
+  assert.deepEqual(handPulls(gh, 'robertblust/design'), []);
+});
+
+test('a pull request that drops one of two entries for an upstream moved no pin and blocks', () => {
+  const gh = handWorld(['hand', 'fix'], { base: '{"t":"github:robertblust/tokens#v1.0.0","u":"github:robertblust/tokens#v2.0.0"}', merge: '{"u":"github:robertblust/tokens#v2.0.0"}' });
+  assert.equal(releaseBlock(gh, 'robertblust/design'), 'unreleased work on main: 2 commits since v2.1.0');
+  assert.equal(pendingRelease(gh, 'robertblust/design'), false);
+  assert.deepEqual(handPulls(gh, 'robertblust/design'), []);
+});
+
 test('a pull request merged into a branch other than main moved no pin and blocks', () => {
   const gh = handWorld(['hand', 'fix']);
   for (const sha of ['hand', 'fix']) gh.pullRecords[`robertblust/design:${sha}`] = [{ ...gh.pullRecords[`robertblust/design:${sha}`][0], base: 'tokens' }];

@@ -118,15 +118,16 @@ export function assessPins(github, member, family, cache = new Map()) {
   return pins;
 }
 
-// Whether a pull request merged into main moved one of the member's declared pins other than
-// the conventions pins, which a hand move owes no release for: the pin reads a value in its file
-// at both the merge commit's first parent, the commit the merge followed (a stacked pull
-// request's base is not that commit), and the merge, and the two differ. A pin added or removed
-// has not moved, so a pull request that only brings in or drops a dependency is work. For a
-// member with no such pin, the merge commit and the pin files are not read. Every pin whose file
-// reads at both refs is judged first; only when none moved and a file could not be read does it
-// throw, and the caller treats that as a move it could not prove: a commit that only re-synced
-// stays a re-sync, any other counts as work.
+// Whether a pull request merged into main moved one of the member's declared pins other than the
+// conventions pins, which a hand move owes no release for: the pin reads values in its file at both
+// the merge commit's first parent, the commit the merge followed (a stacked pull request's base is
+// not that commit), and the merge, and the two share no value. A pin added or removed has not
+// moved, and neither has one that keeps any value it had, so a pull request that brings in or drops
+// a dependency, or an entry of one beside another it leaves, is work; the run's own resync settles
+// a pin moved in part. For a member with no such pin, the merge commit and the pin files are not
+// read. Every pin whose file reads at both refs is judged first; only when none moved and a file
+// could not be read does it throw, and the caller treats that as a move it could not prove: a
+// commit that only re-synced stays a re-sync, any other counts as work.
 function movedPin(github, repo, pull, declared) {
   if (pull.base !== 'main') return false;
   const pins = (declared?.pins ?? []).filter((p) => !NON_PROPAGATING.has(p.kind));
@@ -138,11 +139,11 @@ function movedPin(github, repo, pull, declared) {
       const read = (ref) => {
         const text = ref == null ? null : github.file(repo, d.file, ref);
         if (text === null) throw new Error(`${repo}: ${d.file} at ${ref} cannot be read`);
-        return KINDS[d.kind].read(text, d.repo).join(',');
+        return KINDS[d.kind].read(text, d.repo);
       };
       const was = read(before);
       const is = read(pull.merge);
-      if (was && is && was !== is) return true;
+      if (was.length && is.length && !was.some((v) => is.includes(v))) return true;
     } catch (e) {
       unreadable ??= e;
     }
