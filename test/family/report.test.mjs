@@ -143,6 +143,7 @@ test('a hand pin move is marked in the commit list', () => {
   github.files['robertblust/design']['conventions.json@m1'] = conv('v1.0.0');
   github.files['robertblust/design']['package.json@b1'] = '{"m":"github:robertblust/meta#v1.0.0"}';
   github.files['robertblust/design']['package.json@m1'] = '{"m":"github:robertblust/meta#v2.0.0"}';
+  github.commits['robertblust/design:m1'] = { subject: 'Merge pull request #1', parents: 2, files: [], parent: 'b1' };
   github.pullRecords['robertblust/design:s1'] = [{ number: 1, title: 'Takes meta v2.0.0', url: 'u1', head: 'meta-2', base: 'b1', merge: 'm1' }];
   const r = assessFamily({ github, members, drawing: new Set(['robertblust/site>robertblust/design']), date: '2026-09-28' });
   assert.match(renderReport(r), /\n  - s1 Takes meta v2\.0\.0 \(pin move\)\n  - s2 Tokens spacing\n/);

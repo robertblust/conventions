@@ -365,6 +365,7 @@ function handMoved(github) {
   github.files['o/server']['package.json@b7'] = '{"m":"github:o/meta#v1.0.0"}';
   github.files['o/server']['package.json@m7'] = '{"m":"github:o/meta#v2.0.0"}';
   github.compares['o/server:v1.0.0...main'] = { aheadBy: 1, shas: ['h1'], files: [] };
+  github.commits['o/server:m7'] = { subject: 'Merge pull request #7', parents: 2, parent: 'b7', files: [] };
   github.pullRecords['o/server:h1'] = [{ number: 7, title: 'Takes meta v2.0.0', url: 'u7', head: 'meta-2', base: 'b7', merge: 'm7' }];
   return github;
 }

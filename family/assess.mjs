@@ -1,6 +1,7 @@
 // What each pin of a member is against what its upstream offers, and whether a member other
 // members take by tag has work on main that no release describes.
 import { KINDS, SCANNED, discover, validatePins } from './pins.mjs';
+import { NON_PROPAGATING } from './graph.mjs';
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -117,18 +118,29 @@ export function assessPins(github, member, family, cache = new Map()) {
   return pins;
 }
 
-// Whether a merged pull request moved one of the member's declared pins: the value a pin reads
-// in its file differs between the pull request's base and its merge. A file or value that cannot
-// be read throws, and the caller counts the commit as work.
+// Whether a merged pull request moved one of the member's declared pins other than the
+// conventions pins, which a hand move owes no release for: the value a pin reads in its file
+// differs between the merge commit's first parent, the commit the merge followed (a stacked
+// pull request's base is not that commit), and the merge. Every pin that reads at both refs is
+// judged first; only when none moved and one could not be read does it throw, and the caller
+// counts the commit as work.
 function movedPin(github, repo, pull, declared) {
-  return (declared?.pins ?? []).some((d) => {
-    const read = (ref) => {
-      const text = github.file(repo, d.file, ref);
-      if (text === null) throw new Error(`${repo}: ${d.file} at ${ref} cannot be read`);
-      return KINDS[d.kind].read(text, d.repo).join(',');
-    };
-    return read(pull.base) !== read(pull.merge);
-  });
+  const before = github.commit(repo, pull.merge).parent;
+  let unreadable = null;
+  for (const d of (declared?.pins ?? []).filter((p) => !NON_PROPAGATING.has(p.kind))) {
+    try {
+      const read = (ref) => {
+        const text = ref === null ? null : github.file(repo, d.file, ref);
+        if (text === null) throw new Error(`${repo}: ${d.file} at ${ref} cannot be read`);
+        return KINDS[d.kind].read(text, d.repo).join(',');
+      };
+      if (read(before) !== read(pull.merge)) return true;
+    } catch (e) {
+      unreadable ??= e;
+    }
+  }
+  if (unreadable) throw unreadable;
+  return false;
 }
 
 const declaredPins = (github, repo) => {
@@ -182,12 +194,12 @@ function scanUnreleased(github, repo) {
 
 // A member others take by tag owes no release for what the run or the conventions sync wrote,
 // only for work a person did that moved none of its pins, and that work is what blocks it: a
-// release the run cut over it would carry notes no one wrote. A merge commit only carries the others, so it is not counted
-// either way; its content is in the commits it merged. A merge commit not from a `resync-` pull
-// request is therefore not counted, accepted because its merged commits are, though a conflict
-// resolved inside a merge is not seen. A commit that cannot be read counts as work, because
-// blocking is the side a wrong guess can be undone from, and so does every commit past the most
-// the compare lists, since it was never read at all.
+// release the run cut over it would carry notes no one wrote. A merge commit only carries the
+// others, so it is not counted either way; its content is in the commits it merged. A merge
+// commit not from a `resync-` pull request is therefore not counted, accepted because its merged
+// commits are, though a conflict resolved inside a merge is not seen. A commit that cannot be
+// read counts as work, because blocking is the side a wrong guess can be undone from, and so
+// does every commit past the most the compare lists, since it was never read at all.
 export function releaseBlock(github, repo) {
   const s = scanUnreleased(github, repo);
   if (!s.rel) return 'has no release to follow';
