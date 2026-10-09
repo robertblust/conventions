@@ -31,12 +31,14 @@ export function releaseNotes(pins) {
 }
 
 // The release notes of a member whose unreleased work includes pull requests a person made to
-// move its pins: the run's notes, with one line per pull request after their first paragraph.
+// move its pins: the run's notes, with one line per pull request after their first paragraph. A
+// hand pull request may change more than its pin, so that paragraph no longer says the release
+// changes nothing else. A title keeps its words, and its own final period gives way to the line's.
 export function withCarried(notes, pulls) {
   if (!pulls.length) return notes;
-  const lines = pulls.map((p) => `It also carries [#${p.number}](${p.url}), made by hand: ${p.title}.`).join('\n');
+  const lines = pulls.map((p) => `It also carries [#${p.number}](${p.url}), made by hand: ${p.title.replace(/\.$/, '')}.`).join('\n');
   const [first, ...rest] = notes.split('\n\n');
-  return [first, lines, ...rest].join('\n\n');
+  return [first.replace(' and changes nothing else', ''), lines, ...rest].join('\n\n');
 }
 
 export const pendingNotes = () => 'This release carries pins the family resync already merged and changes nothing else.\n\nNothing breaks. A repository that takes this one re-pins it and changes nothing else.\n';

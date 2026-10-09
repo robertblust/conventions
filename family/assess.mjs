@@ -121,16 +121,19 @@ export function assessPins(github, member, family, cache = new Map()) {
 // Whether a merged pull request moved one of the member's declared pins other than the
 // conventions pins, which a hand move owes no release for: the value a pin reads in its file
 // differs between the merge commit's first parent, the commit the merge followed (a stacked
-// pull request's base is not that commit), and the merge. Every pin that reads at both refs is
-// judged first; only when none moved and one could not be read does it throw, and the caller
-// counts the commit as work.
+// pull request's base is not that commit), and the merge. A member with no such pin is not asked
+// anything, the merge commit is not read. Every pin that reads at both refs is judged first; only
+// when none moved and one could not be read does it throw, and the caller treats that as a move
+// it could not prove: a commit that only re-synced stays a re-sync, any other counts as work.
 function movedPin(github, repo, pull, declared) {
+  const pins = (declared?.pins ?? []).filter((p) => !NON_PROPAGATING.has(p.kind));
+  if (!pins.length) return false;
   const before = github.commit(repo, pull.merge).parent;
   let unreadable = null;
-  for (const d of (declared?.pins ?? []).filter((p) => !NON_PROPAGATING.has(p.kind))) {
+  for (const d of pins) {
     try {
       const read = (ref) => {
-        const text = ref === null ? null : github.file(repo, d.file, ref);
+        const text = ref == null ? null : github.file(repo, d.file, ref);
         if (text === null) throw new Error(`${repo}: ${d.file} at ${ref} cannot be read`);
         return KINDS[d.kind].read(text, d.repo).join(',');
       };
@@ -156,7 +159,9 @@ const declaredPins = (github, repo) => {
 // every commit counts, the fix that came with the move included) or work. A merge commit only
 // carries the others and is not counted either way. A commit that cannot be read counts as work,
 // because blocking is the side a wrong guess can be undone from, and so does every commit past
-// the most the compare lists. `carried` holds the hand pull requests the run's notes name.
+// the most the compare lists. A pin move that cannot be proved, because a pin file cannot be read,
+// does not make a re-sync work: it only fails to count as the run's. `carried` holds the hand
+// pull requests the run's notes name.
 function scanUnreleased(github, repo) {
   const rel = github.latestRelease(repo);
   if (!rel) return { rel: null };
@@ -175,13 +180,29 @@ function scanUnreleased(github, repo) {
       }
       const commit = github.commit(repo, sha);
       if (commit.parents !== 1) continue;
-      const moved = github.pullsOf(repo, sha).find((p) => p.merge && movedPin(github, repo, p, declared));
+      let moved = null;
+      let unproven = null;
+      try {
+        for (const p of github.pullsOf(repo, sha)) {
+          try {
+            if (p.merge && movedPin(github, repo, p, declared)) {
+              moved = p;
+              break;
+            }
+          } catch (e) {
+            unproven ??= e;
+          }
+        }
+      } catch (e) {
+        unproven ??= e;
+      }
       if (moved) {
         carried.set(moved.number, { number: moved.number, title: moved.title, url: moved.url });
         commits.push({ sha, subject: commit.subject, pinMove: true });
         continue;
       }
       const only = resyncOnly(github, repo, sha, commit);
+      if (unproven && !only) throw unproven;
       commits.push({ sha, subject: commit.subject, resyncOnly: only });
       if (!only) work += 1;
     } catch (e) {

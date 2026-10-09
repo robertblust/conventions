@@ -227,8 +227,8 @@ export function cleanDryRuns({ root = process.env.FAMILY_ROOT || join(homedir(),
 }
 
 // Runs the choice and writes the record. A run that throws partway still writes the record of
-// what it did before it stopped, so the owner sees which members moved; a chain the report does
-// not hold stops the run before anything moved, and writes nothing.
+// what it did before it stopped, so the owner sees which members moved; a chain or a member the
+// report does not hold stops the run before anything moved, and writes nothing.
 export function runResync({ report, selection, dryRun, github, member, date, outDir, log }) {
   const record = [];
   const write = () => {
@@ -251,7 +251,7 @@ export function runResync({ report, selection, dryRun, github, member, date, out
 
 // The command, as a function of its arguments and of what it reaches, so a test can stub GitHub
 // and the members. It answers the exit code: 0 for a run with nothing blocked, 1 for a run that
-// blocked a member, 2 for a usage error, a chain the report does not hold or a refusal. It
+// blocked a member, 2 for a usage error, a chain or a member the report does not hold, or a refusal. It
 // installs no signal handler: the run waits in child processes, where a handler would never run
 // and would only keep the signal from ending the run, and a killed run's lock is taken over the
 // next time.

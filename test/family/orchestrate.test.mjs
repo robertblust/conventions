@@ -321,7 +321,7 @@ test('a name given twice, or also a chosen chain\'s taker, runs once', () => {
   const report = assessFamily({ github, members, drawing, date: '2026-09-28' });
   const member = fakeMember(github);
   orchestrate({ report, selection: ['o/server', 'o/server', pinChain(report, 'o/server')], github, member, date: '2026-09-28' });
-  assert.equal(member.calls.filter((c) => c.op === 'update' && c.repo === 'o/server').length, 1);
+  assert.deepEqual(member.calls.map((c) => `${c.op} ${c.repo}`), ['update o/server', 'release o/server', 'update o/site']);
 });
 
 test('a name that is no member, or a member with nothing behind, refuses before anything moves', () => {
@@ -331,6 +331,21 @@ test('a name that is no member, or a member with nothing behind, refuses before 
   assert.throws(() => orchestrate({ report, selection: ['o/nobody'], github, member, date: '2026-09-28' }), (e) => e.choice === true && /no member o\/nobody in the report/.test(e.message));
   assert.throws(() => orchestrate({ report, selection: ['o/meta'], github, member, date: '2026-09-28' }), (e) => e.choice === true && /o\/meta has no pin behind in the report/.test(e.message));
   assert.throws(() => orchestrate({ report, selection: [99], github, member, date: '2026-09-28' }), (e) => e.choice === true && /no chain 99/.test(e.message));
+  assert.deepEqual(member.calls, []);
+});
+
+test('a named member on a cycle has no level to move at and is refused before anything moves', () => {
+  const github = fakeGithub({
+    files: {
+      'o/a': { 'package.json': '{"b":"github:o/b#v1.0.0"}', 'pins.json': declare([npm('o/b')]) },
+      'o/b': { 'package.json': '{"a":"github:o/a#v1.0.0"}', 'pins.json': declare([npm('o/a')]) },
+    },
+    releases: { 'o/a': { tag: 'v1.1.0', url: 'ua' }, 'o/b': { tag: 'v1.1.0', url: 'ub' } },
+  });
+  const ms = ['o/a', 'o/b'].map((repo) => ({ repo }));
+  const report = assessFamily({ github, members: ms, drawing: new Set(['o/a>o/b', 'o/b>o/a']), date: '2026-09-28' });
+  const member = fakeMember(github);
+  assert.throws(() => orchestrate({ report, selection: ['o/a'], github, member, date: '2026-09-28' }), (e) => e.choice === true && /^o\/a has no level to move at$/.test(e.message));
   assert.deepEqual(member.calls, []);
 });
 
@@ -357,6 +372,8 @@ test('a named member whose only behind pin is its conventions pin moves and is n
   const member = fakeMember(github);
   orchestrate({ report, selection: ['o/server'], github, member, date: '2026-09-28' });
   assert.deepEqual(member.calls.map((c) => c.op), ['update']);
+  // Its conventions pin offers o/site nothing, so o/site is not left for a later run.
+  assert.deepEqual(leftBehind(report, ['o/server']), []);
 });
 
 // o/server's main already holds o/meta v2.0.0 from hand pull request #7; its last release is v1.0.0.

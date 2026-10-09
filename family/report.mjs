@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { parseMembers, parseDrawing } from './repositories.mjs';
-import { readMember, assessPins, missingSteps, releaseBlock, pendingRelease, unreleasedCommits, mainState } from './assess.mjs';
+import { readMember, assessPins, missingSteps, releaseBlock, pendingRelease, handPulls, unreleasedCommits, mainState } from './assess.mjs';
 import { edgesOf, levelsOf, chainsOf, stepsOf, CONVENTIONS, TAG_KINDS } from './graph.mjs';
 import { renderReport } from './render.mjs';
 import { realGithub } from './github.mjs';
@@ -72,7 +72,7 @@ export function assessFamily({ github, members, drawing, date }) {
   let n = chains.length;
   for (const repo of [...pending].sort()) {
     n += 1;
-    chains.push({ n, taker: repo, kind: 'release', file: null, upstream: repo, available: 'unreleased', steps: stepsOf(repo, edges, level) });
+    chains.push({ n, taker: repo, kind: 'release', file: null, upstream: repo, available: 'unreleased', steps: stepsOf(repo, edges, level), pulls: handPulls(github, repo).map((p) => p.number) });
   }
   return {
     date,

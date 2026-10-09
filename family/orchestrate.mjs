@@ -1,5 +1,5 @@
-// The run over the chains the owner chose, level by level. It reads each member again before it
-// moves it, so a release made at one level is there to take at the next, and it holds every
+// The run over the chains and members the owner chose, level by level. It reads each member
+// again before it moves it, so a release made at one level is there to take at the next, and it holds every
 // member downstream of one it had to block or found unmanaged. A member `releasesIn` counts is
 // decided from declared pins alone, so an upstream one takes in a file its pins.json does not
 // name never causes a release; and a member whose pins already moved but whose own release the
@@ -34,9 +34,12 @@ export function membersOf(report, selection) {
   const starts = new Set(chosen.map((c) => pinKey(c)));
   const closure = new Set(chosen.flatMap((c) => c.steps.flat()));
   for (const name of new Set(picks.filter((p) => typeof p === 'string'))) {
-    if (!report.members.some((m) => m.repo === name)) throw choiceError(`no member ${name} in the report`);
+    const found = report.members.find((m) => m.repo === name);
+    if (!found) throw choiceError(`no member ${name} in the report`);
     const behind = report.pins.filter((p) => p.taker === name && p.status === 'behind' && p.entry);
     if (!behind.length) throw choiceError(`${name} has no pin behind in the report`);
+    // A member on a cycle has no level, so the run would never reach it.
+    if (found.level == null) throw choiceError(`${name} has no level to move at`);
     for (const p of behind) starts.add(pinKey(p));
     closure.add(name);
   }
@@ -44,12 +47,16 @@ export function membersOf(report, selection) {
 }
 
 // The members downstream of what a choice names that it does not move itself, so the run record
-// says what the next run would take. A choice of chains alone leaves nothing behind.
+// says what the next run would take. Only a named member with a pin behind that propagates
+// leaves anything, and only through a declared pin that propagates, as a chain starts and a run
+// releases; a taker through an undeclared pin is left alone by every run. A choice of chains
+// alone leaves nothing behind.
 export function leftBehind(report, selection) {
   if (selection === 'all') return [];
   const { closure } = membersOf(report, selection);
-  const names = selection.filter((p) => typeof p === 'string');
-  const below = new Set(names.flatMap((n) => [...downstreamOf(n, report.edges)]));
+  const edges = edgesOf(report.pins.filter((p) => p.entry)).filter((e) => e.kinds.some((k) => !NON_PROPAGATING.has(k)));
+  const names = selection.filter((p) => typeof p === 'string' && report.pins.some((q) => q.taker === p && q.status === 'behind' && q.entry && !NON_PROPAGATING.has(q.kind)));
+  const below = new Set(names.flatMap((n) => [...downstreamOf(n, edges)]));
   return [...below].filter((r) => !closure.has(r)).sort();
 }
 

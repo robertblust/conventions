@@ -337,8 +337,14 @@ test('a pull request whose pin value cannot be read blocks', () => {
 
 test('a commit in two pull requests counts as the run\'s when one of them moved a pin', () => {
   const gh = handWorld(['hand']);
-  gh.pullRecords['robertblust/design:hand'] = [{ number: 11, title: 'Other', url: 'u11', head: 'other', base: 'm12', merge: 'm12' }, ...gh.pullRecords['robertblust/design:hand']];
+  // #11 merged on its own and left the pin where it was; only #12 moved it.
+  const same = '{"t":"github:robertblust/tokens#v1.0.0"}';
+  gh.commits['robertblust/design:m11'] = { subject: 'Merge pull request #11', parents: 2, parent: 'b11', files: [] };
+  gh.files['robertblust/design']['package.json@b11'] = same;
+  gh.files['robertblust/design']['package.json@m11'] = same;
+  gh.pullRecords['robertblust/design:hand'] = [{ number: 11, title: 'Other', url: 'u11', head: 'other', base: 'b11', merge: 'm11' }, ...gh.pullRecords['robertblust/design:hand']];
   assert.equal(releaseBlock(gh, 'robertblust/design'), null);
+  assert.deepEqual(handPulls(gh, 'robertblust/design').map((p) => p.number), [12]);
 });
 
 test('a hand pin move makes a release pending, and the report lists its commits as pin moves', () => {
@@ -376,4 +382,35 @@ test('a pin that moved is found whatever order the declared pins come in', () =>
   ] });
   assert.equal(releaseBlock(gh, 'robertblust/design'), null);
   assert.deepEqual(handPulls(gh, 'robertblust/design').map((p) => p.number), [12]);
+});
+
+// A hand re-sync commit of design, merged by pull request #5 before the member declared a pin file.
+function oldResyncWorld(pins) {
+  const gh = resyncWorld(since(['in']));
+  gh.files['robertblust/design']['pins.json'] = JSON.stringify({ pins });
+  gh.commits['robertblust/design:m5'] = { subject: 'Merge pull request #5', parents: 2, parent: 'b5', files: [] };
+  gh.pullRecords['robertblust/design:in'] = [{ number: 5, title: 'Takes conventions v1.36.0', url: 'u5', head: 'conv', base: 'b5', merge: 'm5' }];
+  return gh;
+}
+
+test('a hand re-sync is still a re-sync when a declared pin file cannot be read at the merge', () => {
+  const gh = oldResyncWorld([{ kind: 'source-commit', file: 'source.json', repo: 'robertblust/model' }]);
+  assert.equal(releaseBlock(gh, 'robertblust/design'), null);
+  assert.equal(pendingRelease(gh, 'robertblust/design'), false);
+  assert.deepEqual(handPulls(gh, 'robertblust/design'), []);
+});
+
+test('a hand pull request that left a pin file unreadable and is not a re-sync is work', () => {
+  const gh = oldResyncWorld([{ kind: 'source-commit', file: 'source.json', repo: 'robertblust/model' }]);
+  gh.commits['robertblust/design:in'] = { subject: 'Tokens gain a scale', parents: 1, parent: 'p-in', files: ['tokens.css'] };
+  assert.match(releaseBlock(gh, 'robertblust/design'), /^unreleased work on main: 1 commit since v2\.1\.0, 1 commit could not be read/);
+});
+
+test('a member with only conventions pins does not read the merge commit', () => {
+  const gh = oldResyncWorld([{ kind: 'conventions', file: 'conventions.json', repo: 'robertblust/conventions' }]);
+  const reads = [];
+  const commit = gh.commit;
+  gh.commit = (repo, sha) => { reads.push(sha); return commit(repo, sha); };
+  assert.equal(releaseBlock(gh, 'robertblust/design'), null);
+  assert.ok(!reads.includes('m5'));
 });

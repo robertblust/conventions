@@ -51,7 +51,7 @@ export function renderReport(data) {
   lines.push('## Chains', '');
   if (!data.chains.length) lines.push('Nothing is behind.');
   for (const c of data.chains) {
-    const head = c.kind === 'release' ? `${c.taker} has unreleased resync work` : `${c.upstream} ${shortV(c.available)}`;
+    const head = c.kind === 'release' ? `${c.taker} has unreleased resync work${c.pulls?.length ? `, carrying ${listed(c.pulls.map((n) => `#${n}`))} made by hand` : ''}` : `${c.upstream} ${shortV(c.available)}`;
     lines.push(`${c.n}. ${head} → ${c.steps.map((s) => s.join(', ')).join(' → ')}`);
   }
   lines.push('');
