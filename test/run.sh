@@ -261,6 +261,17 @@ if echo "$out" | grep -q 'docs/kept/a.md:1: colour'; then ok "a British word is 
 printf '```\ncolour inside a fence\n```\n\nand `colour` inline.\n' > "$P/docs/kept/a.md"
 if pcheck > /dev/null; then ok "fenced and inline code are not prose"; else bad "code was scanned as prose: $(pcheck 2>&1)"; fi
 
+# An address is fixed by the site it points to, so a stem in a URL is not prose; the words
+# around it, and a Markdown link's text, still are.
+printf '| Gabler | https://wirtschaftslexikon.gabler.de/definition/stab-linienorganisation-45349 |\n\nSee <https://example.org/organisation>.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "a stem inside a URL is not prose"; else bad "a URL was scanned as prose: $(pcheck 2>&1)"; fi
+printf 'The colour of https://example.org/organisation.\n[the organisation](https://example.org/x)\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:1: colour$' && echo "$out" | grep -q 'docs/kept/a.md:2: organisa$'
+then ok "the line's own words and a link's text are still read beside a URL"
+else bad "a stem beside a URL or in a link's text was missed: $out"
+fi
+
 printf 'A closed—dash.\n' > "$P/docs/kept/a.md"
 out=$(pcheck 2>&1 || true)
 if echo "$out" | grep -q 'docs/kept/a.md:1: closed em-dash'; then ok "a closed em-dash is named"; else bad "a closed em-dash was missed: $out"; fi
