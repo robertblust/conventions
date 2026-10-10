@@ -283,6 +283,10 @@ if echo "$out" | grep -q 'docs/kept/a.md:2: closed em-dash'; then ok "a closed d
 printf '# Verlustanalyse\n\n# colour\n' > "$P/docs/kept/a.md"
 out=$(pcheck 2>&1 || true)
 if echo "$out" | grep -q 'docs/kept/a.md:3: colour'; then ok "only the first H1 is exempt"; else bad "a second H1 was skipped: $out"; fi
+printf -- '---\ntags:\n- Analyse & Recommend\n---\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "a column-0 list item stays in the frontmatter"; else bad "a column-0 item ended the frontmatter: $(pcheck 2>&1)"; fi
+printf -- '---\n# note\nname: Verlustanalyse initialisieren\n---\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "a YAML comment stays in the frontmatter"; else bad "a comment ended the frontmatter: $(pcheck 2>&1)"; fi
 printf -- '---\nk: v\n\nThe colour of it.\n' > "$P/docs/kept/a.md"
 out=$(pcheck 2>&1 || true)
 if echo "$out" | grep -q 'docs/kept/a.md:4: colour'; then ok "an unclosed frontmatter does not hide the page"; else bad "an unclosed frontmatter hid the page: $out"; fi

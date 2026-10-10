@@ -82,7 +82,8 @@ fi
 hits=$(printf '%s\n' "$files" | while IFS= read -r f; do
   # Drop fenced code, inline code and URLs, then scan what is left of each line for a stem or a
   # closed dash. The stem scan alone also skips frontmatter, the page's first H1 and guillemets;
-  # the dash check reads those as written. the match is against the line's own content, never the path awk read it from.
+  # the dash check reads those as written. The match is against the line's own content, never
+  # the path awk read it from.
   # An address is fixed by the site it points to, as a name is, so it ends at a space, a closing
   # parenthesis or angle bracket, or a table pipe, and a Markdown link's text is still read.
   # A fence left open at end of file is a hit of its own, not a silent skip of the rest.
@@ -95,9 +96,10 @@ hits=$(printf '%s\n' "$files" | while IFS= read -r f; do
     }
     FNR == 1 && /^---[ \t\r]*$/ { fm = 1; next }
     fm && /^---[ \t\r]*$/ { fm = 0; next }
-    # A frontmatter that is never closed ends at the first line that is not blank, a key, a
-    # list item or an indented continuation, so a stray opener cannot hide the whole page.
-    fm && !/^[ \t\r]*$/ && !/^[ \t]/ && !/^[A-Za-z_][^:]*:/ { fm = 0 }
+    # A frontmatter that is never closed ends at the first line that is none of these: blank,
+    # indented, a "- item" at column 0, a "#" comment or a key line. A stray opener cannot hide
+    # the whole page.
+    fm && !/^[ \t\r]*$/ && !/^[ \t]/ && !/^- / && !/^#/ && !/^["\047]?[A-Za-z0-9_][^:]*["\047]?:/ { fm = 0 }
     !fm && /^```/ { fence = !fence; next }
     fence { next }
     {
