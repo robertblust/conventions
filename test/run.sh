@@ -257,6 +257,54 @@ printf 'The colour of it.\n' > "$P/docs/kept/a.md"
 out=$(pcheck 2>&1 || true)
 if echo "$out" | grep -q 'docs/kept/a.md:1: colour'; then ok "a British word is named with its file and line"; else bad "a British word was not named: $out"; fi
 
+# A name is the company's and is quoted, not spelled: H1, guillemets, frontmatter and code are not read.
+printf '# Verlustanalyse initialisieren\n\nFine prose.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "an H1 is not read for spelling"; else bad "an H1 was scanned: $(pcheck 2>&1)"; fi
+printf 'The «Verlustanalyse initialisieren» feature and «Analyse & Recommend» too.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "text in guillemets is not read for spelling"; else bad "guillemets were scanned: $(pcheck 2>&1)"; fi
+# shellcheck disable=SC2016 # literal markdown backticks, not command substitution
+printf 'The `colour` value.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "text in backticks is not read for spelling"; else bad "backticks were scanned: $(pcheck 2>&1)"; fi
+printf -- '---\nproducts:\n  - Analyse & Recommend\n---\n\nFine prose.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "frontmatter is not read for spelling"; else bad "frontmatter was scanned: $(pcheck 2>&1)"; fi
+printf -- '---\nk: v\n---\n\nThe colour of it, and «a name».\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:5: colour'; then ok "prose after frontmatter and a quote is still read"; else bad "prose beside a quote was missed: $out"; fi
+
+printf '# Title—dash\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:1: closed em-dash'; then ok "a closed dash in an H1 is still caught"; else bad "an H1 dash was skipped: $out"; fi
+printf 'x «a—b» y\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:1: closed em-dash'; then ok "a closed dash in guillemets is still caught"; else bad "a guillemet dash was skipped: $out"; fi
+printf -- '---\nk: a—b\n---\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:2: closed em-dash'; then ok "a closed dash in frontmatter is still caught"; else bad "a frontmatter dash was skipped: $out"; fi
+printf '# Verlustanalyse\n\n# colour\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:3: colour'; then ok "only the first H1 is exempt"; else bad "a second H1 was skipped: $out"; fi
+printf '«X»colour\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:1: colour'; then ok "text right after a closing guillemet is still read"; else bad "the cut ate the text after a guillemet: $out"; fi
+printf 'The “Analyse & Recommend” feature.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "curly double quotes are not read for spelling"; else bad "curly quotes were scanned: $(pcheck 2>&1)"; fi
+printf 'The “name” and colour.\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:1: colour'; then ok "prose outside curly quotes is still read"; else bad "prose beside curly quotes was missed: $out"; fi
+# shellcheck disable=SC2016 # a literal dollar sign in a key
+printf -- '---\n"@id": x\n$schema: y\n---\nThe colour.\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:5: colour' && ! echo "$out" | grep -q ':[23]:'; then ok "frontmatter keys with @ and \$ stay in the frontmatter"; else bad "an @ or \$ key ended the frontmatter: $out"; fi
+printf '\357\273\277---\nname: Verlustanalyse initialisieren\n---\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "a byte order mark does not hide the frontmatter"; else bad "a BOM hid the frontmatter: $(pcheck 2>&1)"; fi
+printf -- '---\ntags:\n- Analyse & Recommend\n---\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "a column-0 list item stays in the frontmatter"; else bad "a column-0 item ended the frontmatter: $(pcheck 2>&1)"; fi
+printf -- '---\n# note\nname: Verlustanalyse initialisieren\n---\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "a YAML comment stays in the frontmatter"; else bad "a comment ended the frontmatter: $(pcheck 2>&1)"; fi
+printf -- '---\nk: v\n\nThe colour of it.\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:4: colour'; then ok "an unclosed frontmatter does not hide the page"; else bad "an unclosed frontmatter hid the page: $out"; fi
+
 # shellcheck disable=SC2016 # literal markdown backticks, not command substitution
 printf '```\ncolour inside a fence\n```\n\nand `colour` inline.\n' > "$P/docs/kept/a.md"
 if pcheck > /dev/null; then ok "fenced and inline code are not prose"; else bad "code was scanned as prose: $(pcheck 2>&1)"; fi
