@@ -257,6 +257,19 @@ printf 'The colour of it.\n' > "$P/docs/kept/a.md"
 out=$(pcheck 2>&1 || true)
 if echo "$out" | grep -q 'docs/kept/a.md:1: colour'; then ok "a British word is named with its file and line"; else bad "a British word was not named: $out"; fi
 
+# A name is the company's and is quoted, not spelled: H1, guillemets, frontmatter and code are not read.
+printf '# Verlustanalyse initialisieren\n\nFine prose.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "an H1 is not read for spelling"; else bad "an H1 was scanned: $(pcheck 2>&1)"; fi
+printf 'The «Verlustanalyse initialisieren» feature and «Analyse & Recommend» too.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "text in guillemets is not read for spelling"; else bad "guillemets were scanned: $(pcheck 2>&1)"; fi
+printf 'The `colour` value.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "text in backticks is not read for spelling"; else bad "backticks were scanned: $(pcheck 2>&1)"; fi
+printf -- '---\nproducts:\n  - Analyse & Recommend\n---\n\nFine prose.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "frontmatter is not read for spelling"; else bad "frontmatter was scanned: $(pcheck 2>&1)"; fi
+printf -- '---\nk: v\n---\n\nThe colour of it, and «a name».\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:5: colour'; then ok "prose after frontmatter and a quote is still read"; else bad "prose beside a quote was missed: $out"; fi
+
 # shellcheck disable=SC2016 # literal markdown backticks, not command substitution
 printf '```\ncolour inside a fence\n```\n\nand `colour` inline.\n' > "$P/docs/kept/a.md"
 if pcheck > /dev/null; then ok "fenced and inline code are not prose"; else bad "code was scanned as prose: $(pcheck 2>&1)"; fi
