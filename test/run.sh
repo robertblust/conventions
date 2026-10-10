@@ -262,6 +262,7 @@ printf '# Verlustanalyse initialisieren\n\nFine prose.\n' > "$P/docs/kept/a.md"
 if pcheck > /dev/null; then ok "an H1 is not read for spelling"; else bad "an H1 was scanned: $(pcheck 2>&1)"; fi
 printf 'The «Verlustanalyse initialisieren» feature and «Analyse & Recommend» too.\n' > "$P/docs/kept/a.md"
 if pcheck > /dev/null; then ok "text in guillemets is not read for spelling"; else bad "guillemets were scanned: $(pcheck 2>&1)"; fi
+# shellcheck disable=SC2016 # literal markdown backticks, not command substitution
 printf 'The `colour` value.\n' > "$P/docs/kept/a.md"
 if pcheck > /dev/null; then ok "text in backticks is not read for spelling"; else bad "backticks were scanned: $(pcheck 2>&1)"; fi
 printf -- '---\nproducts:\n  - Analyse & Recommend\n---\n\nFine prose.\n' > "$P/docs/kept/a.md"
@@ -269,6 +270,22 @@ if pcheck > /dev/null; then ok "frontmatter is not read for spelling"; else bad 
 printf -- '---\nk: v\n---\n\nThe colour of it, and «a name».\n' > "$P/docs/kept/a.md"
 out=$(pcheck 2>&1 || true)
 if echo "$out" | grep -q 'docs/kept/a.md:5: colour'; then ok "prose after frontmatter and a quote is still read"; else bad "prose beside a quote was missed: $out"; fi
+
+printf '# Title—dash\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:1: closed em-dash'; then ok "a closed dash in an H1 is still caught"; else bad "an H1 dash was skipped: $out"; fi
+printf 'x «a—b» y\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:1: closed em-dash'; then ok "a closed dash in guillemets is still caught"; else bad "a guillemet dash was skipped: $out"; fi
+printf -- '---\nk: a—b\n---\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:2: closed em-dash'; then ok "a closed dash in frontmatter is still caught"; else bad "a frontmatter dash was skipped: $out"; fi
+printf '# Verlustanalyse\n\n# colour\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:3: colour'; then ok "only the first H1 is exempt"; else bad "a second H1 was skipped: $out"; fi
+printf -- '---\nk: v\n\nThe colour of it.\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:4: colour'; then ok "an unclosed frontmatter does not hide the page"; else bad "an unclosed frontmatter hid the page: $out"; fi
 
 # shellcheck disable=SC2016 # literal markdown backticks, not command substitution
 printf '```\ncolour inside a fence\n```\n\nand `colour` inline.\n' > "$P/docs/kept/a.md"
