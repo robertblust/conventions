@@ -283,6 +283,20 @@ if echo "$out" | grep -q 'docs/kept/a.md:2: closed em-dash'; then ok "a closed d
 printf '# Verlustanalyse\n\n# colour\n' > "$P/docs/kept/a.md"
 out=$(pcheck 2>&1 || true)
 if echo "$out" | grep -q 'docs/kept/a.md:3: colour'; then ok "only the first H1 is exempt"; else bad "a second H1 was skipped: $out"; fi
+printf '«X»colour\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:1: colour'; then ok "text right after a closing guillemet is still read"; else bad "the cut ate the text after a guillemet: $out"; fi
+printf 'The “Analyse & Recommend” feature.\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "curly double quotes are not read for spelling"; else bad "curly quotes were scanned: $(pcheck 2>&1)"; fi
+printf 'The “name” and colour.\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:1: colour'; then ok "prose outside curly quotes is still read"; else bad "prose beside curly quotes was missed: $out"; fi
+# shellcheck disable=SC2016 # a literal dollar sign in a key
+printf -- '---\n"@id": x\n$schema: y\n---\nThe colour.\n' > "$P/docs/kept/a.md"
+out=$(pcheck 2>&1 || true)
+if echo "$out" | grep -q 'docs/kept/a.md:5: colour' && ! echo "$out" | grep -q ':[23]:'; then ok "frontmatter keys with @ and \$ stay in the frontmatter"; else bad "an @ or \$ key ended the frontmatter: $out"; fi
+printf '\357\273\277---\nname: Verlustanalyse initialisieren\n---\n' > "$P/docs/kept/a.md"
+if pcheck > /dev/null; then ok "a byte order mark does not hide the frontmatter"; else bad "a BOM hid the frontmatter: $(pcheck 2>&1)"; fi
 printf -- '---\ntags:\n- Analyse & Recommend\n---\n' > "$P/docs/kept/a.md"
 if pcheck > /dev/null; then ok "a column-0 list item stays in the frontmatter"; else bad "a column-0 item ended the frontmatter: $(pcheck 2>&1)"; fi
 printf -- '---\n# note\nname: Verlustanalyse initialisieren\n---\n' > "$P/docs/kept/a.md"
