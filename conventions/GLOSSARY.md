@@ -83,6 +83,8 @@ The German cells are inline code because the prose check reads no language and a
 | actor claim | actor claim | `Actor-Claim` | A claim in a JWT that names who acts. Masculine, `der Actor-Claim`. |
 | steward | steward | `verantwortliche Person` | Who reviews a proposed match; plural `die Mitarbeitenden, die prüfen`. A hotel reader does not know Steward. |
 | API (surface) | surface | `API` | An API as what a caller reaches, `die API`. Not `Schnittstelle`, and not `Surface`, which is a page the model is published on. |
+| interface (between systems) | interface | `Schnittstelle` | What a connection between two systems goes through, as a landscape's `As` column names it: an API, a file transfer, a queue. Feminine, `die Schnittstelle`. An API a caller reaches stays `API`, the row above. |
+| service (of a system) | service | `Service` | What a system exposes to other systems, the landscape pack's type. Masculine, `der Service`, as Swiss IT writes it; not `Dienst`, which beside `System` and `Plattform` reads as a Windows service or a public one. |
 | credit meter | credit meter | `Abrechnung nach Guthaben` | Billing against a prepaid balance. |
 | backfill | backfill | `Historischer Import` | The first import of the history before live data. |
 | walk-in | walk-in | `Walk-in` | A guest without a reservation, as Swiss hotels say it; plural `Walk-ins`. |
