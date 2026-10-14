@@ -810,17 +810,18 @@ yml=$HERE/.github/workflows/check.yml
 # shellcheck disable=SC2016 # literal workflow expression, not command substitution
 if grep -q 'fetch-depth: 0' "$yml" && grep -q 'repository: ${{ github.repository_owner }}/mental-model' "$yml" \
   && grep -q "hashFiles('.companygraph/manifest.json') == ''" "$yml" && grep -q 'companygraph commits .governing-instance --range' "$yml" \
-  && grep -q 'COMPANYGRAPH_RELEASE: v0.89.0' "$yml"
-then ok "the check job judges a model-less member's commits against its organization's instance"; else bad "check.yml does not run the seat check for a member with no model"; fi
+  && grep -q "require('./.governing-instance/.companygraph/manifest.json').tooling" "$yml" && ! grep -q 'COMPANYGRAPH_RELEASE' "$yml"
+then ok "the check job judges a model-less member's commits against its organization's instance, at the release its manifest names"; else bad "check.yml does not run the seat check for a member with no model"; fi
 
 # this repository's own CI checks its pull requests against robertblust/mental-model too, since
 # it carries no model of its own and calls ci.yml rather than the reusable check.yml
 ci=$HERE/.github/workflows/ci.yml
 if grep -q 'fetch-depth: 0' "$ci" && grep -q 'repository: robertblust/mental-model' "$ci" \
-  && grep -q 'path: .governing-instance' "$ci" && grep -q 'COMPANYGRAPH_RELEASE: v0.89.0' "$ci" \
+  && grep -q 'path: .governing-instance' "$ci" \
+  && grep -q "require('./.governing-instance/.companygraph/manifest.json').tooling" "$ci" && ! grep -q 'COMPANYGRAPH_RELEASE' "$ci" \
   && grep -q "if: github.event_name == 'pull_request'$" "$ci"
 then ok "ci.yml checks out robertblust/mental-model and gates the new steps on a pull request alone"
-else bad "ci.yml is missing the governing-instance checkout, its tag, or its pull_request-only gate"
+else bad "ci.yml is missing the governing-instance checkout, the release its manifest names, or its pull_request-only gate"
 fi
 # shellcheck disable=SC2016 # literal workflow expressions, not command substitution
 if grep -q 'companygraph commits .governing-instance --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"' "$ci"

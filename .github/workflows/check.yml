@@ -44,8 +44,9 @@ jobs:
           path: .governing-instance
       - name: every commit names a seat its phase lists
         if: github.event_name == 'pull_request' && hashFiles('.companygraph/manifest.json') == ''
-        # This tag moves when a meta-model release changes what `commits` checks.
-        env:
-          COMPANYGRAPH_RELEASE: v0.89.0
+        # The checker is the release the governing instance's manifest names as `tooling`, as the
+        # commit-msg hook takes it, so the seat check runs at the release that instance's seats
+        # were checked with and this family pins no meta-model release of its own.
         run: |
-          npx --yes --package "github:companygraph/meta-model#${COMPANYGRAPH_RELEASE}" companygraph commits .governing-instance --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          tooling=$(node -p "require('./.governing-instance/.companygraph/manifest.json').tooling")
+          npx --yes --package "github:companygraph/meta-model#v${tooling}" companygraph commits .governing-instance --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
