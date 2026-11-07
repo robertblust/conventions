@@ -9,7 +9,7 @@ Three organizations, one family. `robertblust` holds the person and the shared m
 | robertblust/robertblust.github.io | blust.ch | blust.ch, the profile page and its talks | main | ~/git/robertblust/robertblust.github.io |
 | robertblust/mental-model | Robert Blust — Mental Model | Robert Blust described in CompanyGraph, the reference instance | main | ~/git/robertblust/mental-model |
 | robertblust/field-notes | Robert Blust — Field Notes | problems that took real work to understand, one file each | main | ~/git/robertblust/field-notes |
-| robertblust/mcp-blust-ch | mcp.blust.ch | mcp.blust.ch, the reference instance served over MCP from a pinned commit of the model | main | ~/git/robertblust/mcp-blust-ch |
+| robertblust/mcp-blust-ch | mcp.blust.ch | mcp.blust.ch, the reference instance served over MCP from a pinned commit of the model, and the chat over it | main | ~/git/robertblust/mcp-blust-ch |
 | robertblust/id-blust-ch | id.blust.ch | id.blust.ch, the identity service the three chats sign readers in at: ZITADEL on Cloud Run and what it holds | main | ~/git/robertblust/id-blust-ch |
 | guestgraph/guestgraph.github.io | guestgraph.io | guestgraph.io, the landing page, the model pages drawn from GuestGraph's instance, the API and the intro talk | main | ~/git/guestgraph/guestgraph.github.io |
 | guestgraph/engine | GuestGraph — Engine | identity resolution, guest graph and REST API, the open core | main | ~/git/guestgraph/engine |
@@ -22,8 +22,8 @@ Three organizations, one family. `robertblust` holds the person and the shared m
 | companygraph/meta-model | CompanyGraph — Meta Model | the meta-model: core vocabulary, packs and the conventions that make a graph of Markdown checkable | main | ~/git/companygraph/meta-model |
 | companygraph/mental-model | CompanyGraph — Mental Model | CompanyGraph described in the vocabulary it publishes, the second instance | main | ~/git/companygraph/mental-model |
 | companygraph/mcp-server | CompanyGraph — MCP Server | a read-only MCP server for any instance: the model's facts, queryable by an agent from one pinned commit | main | ~/git/companygraph/mcp-server |
-| companygraph/mcp-companygraph-io | mcp.companygraph.io | mcp.companygraph.io, CompanyGraph's own instance served over MCP from a pinned commit of the model | main | ~/git/companygraph/mcp-companygraph-io |
-| companygraph/mcp-azure-companygraph-io | mcp.azure.companygraph.io | mcp.azure.companygraph.io, CompanyGraph's own instance served over MCP from a pinned commit of the model, on Azure: the first deployment of the server there | main | ~/git/companygraph/mcp-azure-companygraph-io |
+| companygraph/mcp-companygraph-io | mcp.companygraph.io | mcp.companygraph.io, CompanyGraph's own instance served over MCP on Google Cloud from a pinned commit of the model, and the chat over it | main | ~/git/companygraph/mcp-companygraph-io |
+| companygraph/mcp-azure-companygraph-io | mcp.azure.companygraph.io | mcp.azure.companygraph.io, CompanyGraph's own instance served over MCP on Azure from a pinned commit of the model, and the chat over it: the first deployment of both there | main | ~/git/companygraph/mcp-azure-companygraph-io |
 | companygraph/chat-server | CompanyGraph — Chat Server | a chat over any instance's MCP host: a visitor's question answered from what the host's tools say, on a site's page, holding no model of its own | main | ~/git/companygraph/chat-server |
 | companygraph/obsidian-plugin | CompanyGraph — Obsidian Plugin | an Obsidian plugin for any instance: the meta-model's checks while a file is edited, and completion for what its schemas declare | main | ~/git/companygraph/obsidian-plugin |
 | companygraph/.github | CompanyGraph — Organization | the organization profile GitHub shows, and nothing else | main | ~/git/companygraph/.github |
