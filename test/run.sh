@@ -122,6 +122,40 @@ if echo "$out" | grep -q 'no conventions.json'; then ok "a member without a pin 
 out=$(run frobnicate 2>&1 || true)
 if echo "$out" | grep -q '^usage:'; then ok "an unknown command prints usage"; else bad "no usage on an unknown command: $out"; fi
 
+# A tool's local settings are ignored by the member's own .gitignore, which a clone carries, and
+# check names the file wherever it is tracked. A nested copy on disk proves the pattern is
+# written as itself and not expanded by the shell.
+IG=$TMP/ignores
+mkdir -p "$IG/sub/.claude"
+irun() { (cd "$IG" && CONVENTIONS_SOURCE="$HERE" sh "$HERE/conventions/conventions-sync" "$@"); }
+printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$IG/conventions.json"
+printf 'node_modules' > "$IG/.gitignore"
+printf '{}\n' > "$IG/sub/.claude/settings.local.json"
+git -C "$IG" init -q
+irun sync > /dev/null 2>&1
+if grep -qx 'node_modules' "$IG/.gitignore" && grep -qxF '**/.claude/settings.local.json' "$IG/.gitignore"
+then ok "sync appends the ignore line and keeps the member's own, even after a last line with no newline"
+else bad "sync did not append the ignore line cleanly: $(cat "$IG/.gitignore")"
+fi
+if [ "$(grep -c 'conventions-sync keeps' "$IG/.gitignore")" = 1 ]; then ok "the line comes under one comment saying who keeps it"; else bad "the comment is missing or repeated"; fi
+cp "$IG/.gitignore" "$TMP/gitignore.before"
+irun sync > /dev/null 2>&1
+if cmp -s "$IG/.gitignore" "$TMP/gitignore.before"; then ok "a second sync leaves .gitignore unchanged"; else bad "a second sync rewrote .gitignore"; fi
+if irun check > /dev/null 2>&1; then ok "check passes with the line in place"; else bad "check fails with the line in place: $(irun check 2>&1)"; fi
+if git -C "$IG" -c core.excludesFile=/dev/null check-ignore -q sub/.claude/settings.local.json && git -C "$IG" -c core.excludesFile=/dev/null check-ignore -q .claude/settings.local.json
+then ok "the line ignores the file at the root and below it, with no ignore outside the repository"
+else bad "the line does not ignore the file without a global ignore"
+fi
+printf 'node_modules\n' > "$IG/.gitignore"
+out=$(irun check 2>&1 || true)
+if echo "$out" | grep -qF '.gitignore does not carry **/.claude/settings.local.json'; then ok "check names a missing ignore line"; else bad "check missed a missing ignore line: $out"; fi
+cp "$TMP/gitignore.before" "$IG/.gitignore"
+git -C "$IG" add -f sub/.claude/settings.local.json
+out=$(irun check 2>&1 || true)
+if echo "$out" | grep -q 'sub/.claude/settings.local.json is committed .* rotate'; then ok "check names a tracked settings file and says to rotate"; else bad "check missed a tracked settings file: $out"; fi
+git -C "$IG" rm -q --cached sub/.claude/settings.local.json
+if irun check > /dev/null 2>&1; then ok "check passes once the file is untracked"; else bad "check still fails once the file is untracked: $(irun check 2>&1)"; fi
+
 # The seat hook: vendored, executable, in use where sync runs in a clone, and never over a
 # hooks path a member set for itself or over hooks git already runs from its own directory.
 printf '{ "repo": "robertblust/conventions", "tag": "v1.0.0" }\n' > "$MEMBER/conventions.json"

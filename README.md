@@ -29,7 +29,7 @@ sh conventions/conventions-sync check   # exit 1 with one ✗ line per thing tha
 sh conventions/conventions-sync sync    # bring the copy to the release conventions.json names
 ```
 
-`sync` also points `core.hooksPath` at the vendored `conventions/hooks` in a member's clone. This repository is the source rather than a member, its own `conventions.json` carries no pin, and `sync` does not run here, so run `git config core.hooksPath conventions/hooks` once by hand instead.
+`sync` also points `core.hooksPath` at the vendored `conventions/hooks` in a member's clone. This repository is the source rather than a member, its own `conventions.json` carries no pin, and `sync` does not run here, so run `git config core.hooksPath conventions/hooks` once by hand instead. `sync` also appends to a member's own `.gitignore` the line that keeps an agent tool's local settings out of the repository, because those settings can hold a secret and an ignore kept on one machine does not travel with a clone; `check` fails where the line is missing or the file is tracked, and this repository carries the line in its `.gitignore` by hand.
 
 Then add `.github/workflows/conventions.yml`, which calls the job every member runs:
 
