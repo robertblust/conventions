@@ -7,3 +7,6 @@ node_modules
 
 # The family report and the resync write here; what they write is regenerated, never kept.
 /dist
+
+# A tool's local settings can hold a secret; conventions-sync keeps the lines below.
+**/.claude/settings.local.json
