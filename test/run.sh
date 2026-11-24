@@ -530,6 +530,15 @@ then ok "an ignore that names another package covers nothing, in every directory
 else bad "a wrong ignore was taken for the right one: $out"
 fi
 
+# A family package taken from npm by its exact version is a family pin too, under its scoped
+# name; a scoped package outside the family is not.
+printf '{ "dependencies": { "@companygraph/mcp-server": "0.58.0", "@types/node": "22.20.5" } }\n' > "$D/package.json"
+out=$(dcheck 2>&1 || true)
+if echo "$out" | grep -q 'the npm block for / watches @companygraph/mcp-server (package.json:1), a family pin the resync moves; add  - dependency-name: "@companygraph/mcp-server"  to its ignore' && ! echo "$out" | grep -q 'watches @types/node'
+then ok "a family package pinned by its npm version is a family pin, and a scoped package outside the family is not"
+else bad "@companygraph/mcp-server was not held, or @types/node was: $out"
+fi
+
 # The tools a conventions release pins are family pins wherever a package.json declares them, and
 # the check's list is the one conventions-format runs, so the two cannot name different tools.
 printf '{ "devDependencies": { "markdownlint-cli2": "0.23.2", "typescript": "7.0.2" } }\n' > "$D/package.json"

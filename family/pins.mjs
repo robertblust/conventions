@@ -15,6 +15,11 @@ function setJsonString(text, key, value) {
   return text.replace(re, `$1${value}"`);
 }
 
+// A package the family publishes to npm is named after the repository it is released from, so a
+// pin by version names its upstream without a field of its own.
+export const packageOf = (repo) => `@${repo}`;
+const versionLine = (repo) => `("${esc(packageOf(repo))}"\\s*:\\s*")(\\d+\\.\\d+\\.\\d+)"`;
+
 export const KINDS = {
   conventions: {
     byTag: true,
@@ -32,6 +37,12 @@ export const KINDS = {
     byTag: true,
     read: (text, repo) => uniq([...text.matchAll(new RegExp(`"github:${esc(repo)}#([^"]+)"`, 'g'))].map((m) => m[1])),
     write: (text, repo, value) => text.replace(new RegExp(`("github:${esc(repo)}#)[^"]+"`, 'g'), `$1${value}"`),
+    commands: ['npm install'],
+  },
+  'npm-version': {
+    byTag: true,
+    read: (text, repo) => uniq([...text.matchAll(new RegExp(versionLine(repo), 'g'))].map((m) => `v${m[2]}`)),
+    write: (text, repo, value) => text.replace(new RegExp(versionLine(repo), 'g'), `$1${value.replace(/^v/, '')}"`),
     commands: ['npm install'],
   },
   'source-commit': {
@@ -74,7 +85,10 @@ export function discover(file, text) {
     if (file === 'conventions.json') return as('conventions', [JSON.parse(text).repo]);
     if (file === 'service-conventions.json') return as('service-conventions', [JSON.parse(text).repo]);
     if (file.endsWith('api/sources.json')) return as('contract-commit', [...text.matchAll(/"([\w.-]+\/[\w.-]+)@[0-9a-f]{7,40}:/g)].map((m) => m[1]));
-    if (base === 'package.json') return as('npm-tag', [...text.matchAll(/"github:([\w.-]+\/[\w.-]+)#[^"]+"/g)].map((m) => m[1]));
+    if (base === 'package.json') return [
+      ...as('npm-tag', [...text.matchAll(/"github:([\w.-]+\/[\w.-]+)#[^"]+"/g)].map((m) => m[1])),
+      ...as('npm-version', [...text.matchAll(/"@([\w.-]+\/[\w.-]+)"\s*:\s*"\d+\.\d+\.\d+"/g)].map((m) => m[1])),
+    ];
     if (base === 'source.json' || base === 'api-sources.json') return as('source-commit', sourceObjects(JSON.parse(text)).map((o) => o.repo));
     if (file === '.companygraph/manifest.json') return JSON.parse(text).tooling ? as('core-release', ['companygraph/meta-model']) : [];
   } catch {

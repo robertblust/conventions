@@ -84,6 +84,9 @@ export function assessPins(github, member, family, cache = new Map()) {
     const entry = declared.find((d) => d.kind === f.kind && d.file === f.file && d.repo === f.repo) ?? null;
     const pin = { taker: member.repo, kind: f.kind, file: f.file, upstream: f.repo, pinned: kind.read(text, f.repo), entry };
     if (!family.has(f.repo)) {
+      // Every scoped package with an exact version reads as one, `@types/node` too; only the
+      // family's own packages are pins.
+      if (f.kind === 'npm-version') continue;
       pins.push({ ...pin, status: 'outside' });
       continue;
     }
