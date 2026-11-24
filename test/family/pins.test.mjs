@@ -19,6 +19,14 @@ test('an npm pin moves only its own repository', () => {
   assert.equal(KINDS['npm-tag'].write(text, 'companygraph/meta-model', 'v0.56.0'), '{ "a": "github:companygraph/meta-model#v0.56.0", "b": "github:companygraph/mcp-server#v0.38.0" }');
 });
 
+test('an npm-version pin reads its package by the repository it is released from, exact versions only', () => {
+  const text = '{ "@companygraph/meta-model": "0.97.0", "@companygraph/mcp-server": "0.76.0", "@companygraph/chat-server": "^0.46.0", "name": "@companygraph/meta-model" }';
+  assert.deepEqual(KINDS['npm-version'].read(text, 'companygraph/meta-model'), ['v0.97.0']);
+  assert.deepEqual(KINDS['npm-version'].read(text, 'companygraph/chat-server'), []);
+  assert.equal(KINDS['npm-version'].write(text, 'companygraph/meta-model', 'v0.98.0'), text.replace('"0.97.0"', '"0.98.0"'));
+  assert.deepEqual(KINDS['npm-version'].commands, ['npm install']);
+});
+
 test('a source pin finds its object at the top or under a key', () => {
   const top = `{"repo": "robertblust/mental-model", "commit": "${A}"}`;
   const keyed = `{"meta-model":{"repo":"companygraph/meta-model","commit":"${A}"},"mental-model":{"repo":"companygraph/mental-model","commit":"${B}"}}`;
@@ -47,6 +55,7 @@ test('discover finds the pins of every scanned file', () => {
   assert.deepEqual(kinds(discover('api-sources.json', `{"engine":{"repo":"guestgraph/engine","commit":"${A}"}}`)), ['source-commit guestgraph/engine']);
   assert.deepEqual(kinds(discover('src/main/resources/api/sources.json', `{"sources":["guestgraph/engine@${A}:x.yaml","guestgraph/engine@${B}:y.yaml"]}`)), ['contract-commit guestgraph/engine']);
   assert.deepEqual(kinds(discover('.companygraph/manifest.json', '{"tooling":"0.57.0","core":{"version":"0.46.0"}}')), ['core-release companygraph/meta-model']);
+  assert.deepEqual(kinds(discover('package.json', '{"a":"github:robertblust/design#v1.0.0","b":{"@companygraph/meta-model":"0.97.0","@types/node":"^22.0.0"}}')), ['npm-tag robertblust/design', 'npm-version companygraph/meta-model']);
   assert.deepEqual(discover('source.json', 'not json'), []);
   assert.deepEqual(discover('package.json', '{"name":"no pins"}'), []);
   assert.deepEqual(discover('conventions.json', '{ "exclude": ["docs/superpowers"], "format-exclude": [] }'), []);

@@ -48,6 +48,14 @@ test('each pin of a member gets its status', () => {
   assert.equal(model.available, B);
 });
 
+test('a family package pinned by its npm version is judged like a tag, and another scoped package is no pin', () => {
+  const gh = family();
+  gh.files['robertblust/model']['package.json'] = '{"dependencies":{"@robertblust/design":"2.0.0","@types/node":"22.20.5"}}';
+  gh.files['robertblust/model']['pins.json'] = JSON.stringify({ pins: [{ kind: 'npm-version', file: 'package.json', repo: 'robertblust/design' }] });
+  const pins = assessPins(gh, readMember(gh, 'robertblust/model'), FAMILY).filter((p) => p.file === 'package.json');
+  assert.deepEqual(pins.map((p) => [p.kind, p.upstream, p.pinned, p.available, p.status]), [['npm-version', 'robertblust/design', ['v2.0.0'], 'v2.1.0', 'behind']]);
+});
+
 test('a commit pin whose watched paths did not change is current', () => {
   const gh = family({ compares: { [`robertblust/model:${A}...${B}`]: { aheadBy: 3, shas: [], files: ['docs/y.md'] } } });
   const pins = assessPins(gh, readMember(gh, 'robertblust/site'), FAMILY);
