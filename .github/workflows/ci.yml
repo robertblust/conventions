@@ -35,4 +35,4 @@ jobs:
         # were checked with and this family pins no meta-model release of its own.
         run: |
           tooling=$(node -p "require('./.governing-instance/.companygraph/manifest.json').tooling")
-          npx --yes --package "github:companygraph/meta-model#v${tooling}" companygraph commits .governing-instance --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          npx --yes --package "@companygraph/meta-model@${tooling}" companygraph commits .governing-instance --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
