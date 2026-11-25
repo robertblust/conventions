@@ -33,7 +33,10 @@ out=$(
   if [ -n "${COMPANYGRAPH_CLI:-}" ]; then
     node "$COMPANYGRAPH_CLI" commits "$instance" --message "$1"
   elif command -v npx > /dev/null 2>&1 && [ -n "$tooling" ]; then
-    npx --yes --prefer-offline --package "@companygraph/meta-model@$tooling" companygraph commits "$instance" --message "$1"
+    # Not --prefer-offline: npm would trust a cached package document older than the release
+    # named here and answer that the release does not exist; without it, npm asks the registry
+    # whether its copy is current.
+    npx --yes --package "@companygraph/meta-model@$tooling" companygraph commits "$instance" --message "$1"
   else
     false
   fi
