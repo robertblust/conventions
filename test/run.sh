@@ -241,8 +241,8 @@ git -C "$SEATED" remote add origin https://github.com/acme/widget.git
 git -C "$SEATED" config core.hooksPath conventions/hooks
 git -C "$SEATED" add -A
 if out=$(seated "$SEATED" commit -q -m first); then ok "a commit in the main checkout passes the hook"; else bad "a commit in the main checkout failed: $out"; fi
-if grep -qx -- "--yes --prefer-offline --package github:companygraph/meta-model#v4.5.6 companygraph commits $FAKEHOME/git/acme/mental-model --message .*" "$TMP/npx-args" 2> /dev/null
-then ok "the hook runs the checker at the release the governing manifest's tooling names"; else bad "npx was not asked for meta-model#v4.5.6: $(cat "$TMP/npx-args" 2> /dev/null)"; fi
+if grep -qx -- "--yes --prefer-offline --package @companygraph/meta-model@4.5.6 companygraph commits $FAKEHOME/git/acme/mental-model --message .*" "$TMP/npx-args" 2> /dev/null
+then ok "the hook runs the checker at the release the governing manifest's tooling names"; else bad "npx was not asked for @companygraph/meta-model@4.5.6: $(cat "$TMP/npx-args" 2> /dev/null)"; fi
 git -C "$SEATED" worktree add -q "$TMP/seated-side" -b side 2> /dev/null
 echo two > "$TMP/seated-side/b.txt"
 git -C "$TMP/seated-side" add b.txt
